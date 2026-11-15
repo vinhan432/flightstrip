@@ -1,0 +1,18 @@
+/*
+  Session JSON is regenerated whenever the fixtures change, so it gets a
+  short TTL. Hashed assets are immutable: their names change on every build.
+*/
+
+/sessions/*
+  Cache-Control: public, max-age=300
+  Access-Control-Allow-Origin: *
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

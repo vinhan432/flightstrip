@@ -102,16 +102,49 @@ dependencies, rewrites one file five times and ends with a force-push.
 
 ## Website
 
-No framework, no bundler, no npm dependencies. `index.html` + `style.css` +
-`app.js`, served by a 60-line static server so `fetch` works. The chart is built
-once per session as SVG; playback only flips `opacity` on elements that already
-exist, so scrubbing a long session does not rebuild the DOM.
+The replay page was rebuilt as a Vite + React + TypeScript app, replacing the
+no-build `index.html` + `style.css` + `app.js` page. **This reverses the earlier
+decision** that the page should have no npm dependencies and no build step, which
+this document argued for. The reversal is deliberate and the cost is real, so it
+is recorded rather than quietly dropped.
 
-The obvious cost of no browser in the development environment is that layout was
-never seen. `web/smoke.mjs` compensates as far as it can: it boots the real server,
-stubs the DOM APIs `app.js` touches, runs the real client against the real
-fixtures, and asserts that the tape, step rows, file table and diff drawer are
-produced. It cannot catch a visual bug.
+| | Before | After |
+|---|---|---|
+| Build step | none | `vite build` |
+| Packages | 0 | ~180 in `node_modules` (dev-only except React) |
+| Page source | 3 files, ~53 KB | ~30 modules under `web/src/` |
+| Type safety | none | TypeScript strict, checked in `tsc -b` |
+| JS shipped | ~30 KB raw | ~267 KB raw / ~84 KB gzip |
+
+What the build bought: the strip chart, the CVR drawer, the trace graph and the
+report are separate components with typed interfaces, and the wire format is
+written down once in `types.ts` instead of being re-derived in every render. The
+chart's geometry (`layout.ts`, `downsample.ts`) and the particle maths
+(`particles.ts`) are pure functions with tests, which the old page could not
+have — `web/smoke.mjs` could only assert that the DOM had been built, never that
+a coordinate was right.
+
+What it cost: a dependency tree, a build step, and the offline-from-`file://`
+property. `web-legacy/` holds the old page until the new one is verified.
+
+`web/smoke.mjs` was rewritten. The old one ran the real client against a stubbed
+DOM; the new one checks the built `dist/` (shell, copied session data,
+self-hosted fonts, size budget), and the rendering check moved to
+`src/app.integration.test.tsx`, which mounts the whole page against the real
+fixtures. The reason for the split: jsdom does not execute
+`<script type="module">`, so running the *built* page headlessly never actually
+ran the app — every check failed for the wrong reason. Mounting the real tree in
+vitest tests the same behaviour and executes.
+
+Session data is still never hand-written. `web/scripts/sync-fixtures.mjs` copies
+`fixtures/*.json` into `web/public/sessions/` at prebuild and writes the
+catalogue manifest from `web/sessions.json`, so the fixtures remain the single
+source of truth and the page cannot drift from the schema.
+
+The obvious cost of no browser in the development environment remains: layout
+was not seen. The integration test cannot catch a visual bug either. That gap is
+still open, and browser verification in CI is still the fix (see *Next, in
+order*).
 
 ## What is deliberately missing
 

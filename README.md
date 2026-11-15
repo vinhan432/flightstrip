@@ -113,19 +113,39 @@ and in a terminal.
 ### Replay
 
 ```sh
-node web/serve.js    # http://localhost:4173/
+cd web
+npm install
+npm run dev          # http://localhost:5173/
 ```
 
 The replay page takes a `session.json` — one of the bundled fixtures, or your
-own via **Open session.json…** — and draws it as a paper strip chart. Press play
-and the tape advances: prompt bands, file changes, commands, test runs and
-incident spikes appear in the order they happened. Click any step to read the
-diff hunk that caused it.
+own via **Load Your Own** — and draws it as a paper strip chart. Press play and
+the tape advances: prompt bands, file changes, commands, test runs and incident
+spikes appear in the order they happened. Click any step to read the diff hunk
+that caused it.
 
-The page has no build step and no npm dependencies: `index.html`, `style.css` and
-`app.js`. Next to them are two small Node scripts — `serve.js`, a static server
-that exists only because `fetch` does not work from `file://`, and `smoke.mjs`,
-which runs the real client against a stubbed DOM as a startup check.
+The page is a Vite + React + TypeScript app. It has no CSS framework, no
+animation library and no component library: the styling is hand-written CSS, the
+chart is Canvas 2D under an SVG overlay, and the motion is CSS keyframes and
+`requestAnimationFrame`. Fonts are self-hosted, so nothing is fetched at runtime.
+
+> **This is a deliberate reversal of an earlier decision.** The page used to be
+> `index.html` + `style.css` + `app.js` with no npm dependencies and no build
+> step, and NOTES.md argued for that. The replay page is now a compiled app; the
+> recorder is still dependency-free. The old page is kept in `web-legacy/` until
+> the new one is verified, then removed. Why the change was worth it is in
+> [NOTES.md](NOTES.md).
+
+Two scripts support it:
+
+- `web/scripts/sync-fixtures.mjs` copies `fixtures/*.json` into
+  `web/public/sessions/` and writes the catalogue manifest. Session data is
+  generated, never hand-written, so it cannot drift from the schema.
+- `web/smoke.mjs` checks the built `dist/`: the shell, the copied session data,
+  self-hosted fonts and the size budget.
+
+The real rendering check is `web/src/app.integration.test.tsx`, which mounts the
+whole page against the real fixtures.
 
 ## What gets recorded
 
@@ -198,7 +218,8 @@ credit them to what was asked.
 crates/flightstrip-core/    recording, storage, diffing, detectors, export
 crates/flightstrip-cli/     argument parsing, terminal, process spawning
 fixtures/                   three generated sessions (clean / weakened / risky)
-web/                        static replay page, no dependencies
+web/                        the replay page (Vite + React + TypeScript)
+web-legacy/                 the pre-rewrite page, kept until the new one is verified
 ```
 
 ## Development
@@ -208,8 +229,22 @@ cargo fmt --all
 cargo clippy --all-targets -- -D warnings
 cargo test
 cargo run -p flightstrip-core --example fixtures   # regenerate fixtures/
-node web/smoke.mjs                                # boot the replay page headlessly
+cd web && npm install && npm test                  # unit + integration tests
+cd web && npm run build && node smoke.mjs          # build, then check the artifact
 ```
 
-The core has no third-party dependencies and the web page has no npm
-dependencies. Why, and what that costs, is in [NOTES.md](NOTES.md).
+The recorder core has no third-party dependencies. The replay page is a compiled
+app; why that changed, and what it cost, is in [NOTES.md](NOTES.md).
+
+## Deploy
+
+The replay page is a static site. Build it, then deploy `dist/` to Cloudflare
+Pages with your own credentials:
+
+```sh
+cd web && npm run build
+npx wrangler pages deploy dist --project-name flightstrip
+```
+
+`web/public/_headers` sets cache control: session JSON is short-lived, hashed
+assets are immutable.
