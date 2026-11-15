@@ -14,6 +14,7 @@ import {
 } from "react";
 import type { Session, Severity } from "./types";
 import { parseSession } from "./utils/parseSession";
+import { readFileText } from "./utils/readFile";
 
 export interface SessionManifestEntry {
   id: string;
@@ -111,7 +112,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setStatus("loading");
       setError(null);
       try {
-        loadFromText(await file.text(), file.name);
+        loadFromText(await readFileText(file), file.name);
       } catch (cause) {
         setStatus("error");
         setError(cause instanceof Error ? cause.message : "Failed to read file");
