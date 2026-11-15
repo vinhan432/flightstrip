@@ -1,0 +1,60 @@
+/* Print: the report, and only the report.
+   A reviewer should be able to hand the investigation to someone on paper. */
+
+@media print {
+  @page {
+    margin: 18mm;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 11pt;
+  }
+
+  /* Hide everything that is not the report. */
+  .hero,
+  .data-plate,
+  .chart-well,
+  .scrubber,
+  .transport,
+  .cvr,
+  .graph-wrap,
+  .briefing,
+  .download,
+  .install-line,
+  .dropzone,
+  .footer,
+  .section-head,
+  .toast,
+  .modal-backdrop {
+    display: none !important;
+  }
+
+  .report {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: #fff;
+  }
+
+  /* The watermark must not obscure text on paper. */
+  .report .watermark {
+    color: rgba(185, 28, 28, 0.05);
+  }
+
+  /* Expanded diffs and timelines print in full. */
+  .diff {
+    font-size: 9pt;
+  }
+
+  .report-timeline li {
+    border-bottom: 1px solid #ccc;
+  }
+
+  a[href]::after {
+    content: "";
+  }
+}

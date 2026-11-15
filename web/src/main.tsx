@@ -10,6 +10,7 @@ import "./styles/typography.css";
 import "./styles/paper.css";
 import "./styles/animations.css";
 import "./styles/components.css";
+import "./styles/print.css";
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
