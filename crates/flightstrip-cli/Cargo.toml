@@ -1,0 +1,15 @@
+[package]
+name = "flightstrip"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Flightstrip CLI: record, inspect and export agent coding sessions."
+
+[[bin]]
+name = "flightstrip"
+path = "src/main.rs"
+
+# No CLI framework, no error crate, no signal crate: argument parsing, error
+# context and Ctrl+C handling are each a few dozen lines in `src/`.
+[dependencies]
+flightstrip-core = { path = "../flightstrip-core" }

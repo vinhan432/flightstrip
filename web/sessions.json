@@ -1,0 +1,19 @@
+{
+  "sessions": [
+    {
+      "name": "Checkout: split the store",
+      "file": "../fixtures/clean.json",
+      "blurb": "A quiet session: refactor, new test, green throughout."
+    },
+    {
+      "name": "Uploads: make the failing test pass",
+      "file": "../fixtures/weakened-tests.json",
+      "blurb": "The suite goes green because an assertion and a test disappear."
+    },
+    {
+      "name": "Auth: ship the webhook signature check",
+      "file": "../fixtures/risky-session.json",
+      "blurb": "Secret in source, .env touched, force-push, five rewrites of one file."
+    }
+  ]
+}

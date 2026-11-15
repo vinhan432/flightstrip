@@ -1,0 +1,10 @@
+[package]
+name = "flightstrip-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Flight recorder for AI coding agents: event log, content-addressed snapshots, deterministic detectors."
+
+# Deliberately empty. See NOTES.md: the recorder has no third-party
+# dependencies, so `cargo build` compiles only this workspace and std.
+[dependencies]

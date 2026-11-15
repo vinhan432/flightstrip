@@ -1,0 +1,355 @@
+{
+  "version": 1,
+  "meta": {
+    "id": "20261114T091200Z-a1",
+    "title": "Checkout: split the store",
+    "agent": "claude-code",
+    "started_at": "2026-11-14T09:12:00.000Z",
+    "duration_ms": 96000,
+    "os": "windows",
+    "repo_name": "checkout-service",
+    "label": "fixture"
+  },
+  "prompts": [
+    {
+      "id": "p-2",
+      "text": "split the order store out of checkout.ts",
+      "step": 2,
+      "t_ms": 2000,
+      "files_touched": 2,
+      "commands_run": 0,
+      "incidents": 0
+    },
+    {
+      "id": "p-6",
+      "text": "now add a test for the new store",
+      "step": 6,
+      "t_ms": 40000,
+      "files_touched": 1,
+      "commands_run": 1,
+      "incidents": 0
+    },
+    {
+      "id": "p-10",
+      "text": "thanks, run the linter too",
+      "step": 10,
+      "t_ms": 80000,
+      "files_touched": 0,
+      "commands_run": 1,
+      "incidents": 0
+    }
+  ],
+  "steps": [
+    {
+      "seq": 0,
+      "t_ms": 1794647520000,
+      "kind": "session_start",
+      "title": "Checkout: split the store",
+      "agent": "claude-code",
+      "os": "windows",
+      "repo_name": "checkout-service"
+    },
+    {
+      "seq": 1,
+      "t_ms": 400,
+      "kind": "note",
+      "text": "Recording started in the checkout-service repository."
+    },
+    {
+      "seq": 2,
+      "t_ms": 2000,
+      "kind": "prompt",
+      "id": "p-2",
+      "text": "split the order store out of checkout.ts",
+      "source": "mark"
+    },
+    {
+      "seq": 3,
+      "t_ms": 9000,
+      "kind": "file_change",
+      "path": "src/store.ts",
+      "op": "create",
+      "before_hash": null,
+      "after_hash": "4afa375bf531f1193a5f26b007a83f67",
+      "lines_added": 15,
+      "lines_removed": 0,
+      "prompt_id": "p-2",
+      "hunks": [
+        {
+          "old_start": 1,
+          "new_start": 1,
+          "lines": [
+            {
+              "tag": "add",
+              "text": "use std::collections::HashMap;"
+            },
+            {
+              "tag": "add",
+              "text": ""
+            },
+            {
+              "tag": "add",
+              "text": "pub struct Store {"
+            },
+            {
+              "tag": "add",
+              "text": "    items: HashMap<String, String>,"
+            },
+            {
+              "tag": "add",
+              "text": "}"
+            },
+            {
+              "tag": "add",
+              "text": ""
+            },
+            {
+              "tag": "add",
+              "text": "impl Store {"
+            },
+            {
+              "tag": "add",
+              "text": "    pub fn new() -> Self {"
+            },
+            {
+              "tag": "add",
+              "text": "        Store { items: HashMap::new() }"
+            },
+            {
+              "tag": "add",
+              "text": "    }"
+            },
+            {
+              "tag": "add",
+              "text": ""
+            },
+            {
+              "tag": "add",
+              "text": "    pub fn get(&self, key: &str) -> Option<&String> {"
+            },
+            {
+              "tag": "add",
+              "text": "        self.items.get(key)"
+            },
+            {
+              "tag": "add",
+              "text": "    }"
+            },
+            {
+              "tag": "add",
+              "text": "}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "seq": 4,
+      "t_ms": 14500,
+      "kind": "file_change",
+      "path": "src/checkout.ts",
+      "op": "modify",
+      "before_hash": "dc3c9da0b521cd29f9dcb7041cd165b2",
+      "after_hash": "6d5aa25ca36ca5bc4c73934963ca296a",
+      "lines_added": 2,
+      "lines_removed": 2,
+      "prompt_id": "p-2",
+      "hunks": [
+        {
+          "old_start": 1,
+          "new_start": 1,
+          "lines": [
+            {
+              "tag": "remove",
+              "text": "import { db } from './db';"
+            },
+            {
+              "tag": "add",
+              "text": "import { store } from './store';"
+            },
+            {
+              "tag": "context",
+              "text": ""
+            },
+            {
+              "tag": "context",
+              "text": "export function total(order) {"
+            },
+            {
+              "tag": "remove",
+              "text": "  return db.orders.get(order).total;"
+            },
+            {
+              "tag": "add",
+              "text": "  return store.total(order);"
+            },
+            {
+              "tag": "context",
+              "text": "}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "seq": 5,
+      "t_ms": 22000,
+      "kind": "test_run",
+      "cmd": "cargo test",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 1,
+      "total": 13,
+      "ok": true,
+      "prompt_id": "p-2"
+    },
+    {
+      "seq": 6,
+      "t_ms": 40000,
+      "kind": "prompt",
+      "id": "p-6",
+      "text": "now add a test for the new store",
+      "source": "mark"
+    },
+    {
+      "seq": 7,
+      "t_ms": 52000,
+      "kind": "file_change",
+      "path": "src/store.test.ts",
+      "op": "create",
+      "before_hash": null,
+      "after_hash": "0ad521f23c0b4403b4f376c6fdbfa20f",
+      "lines_added": 6,
+      "lines_removed": 0,
+      "prompt_id": "p-6",
+      "hunks": [
+        {
+          "old_start": 1,
+          "new_start": 1,
+          "lines": [
+            {
+              "tag": "add",
+              "text": "import { Store } from './store';"
+            },
+            {
+              "tag": "add",
+              "text": ""
+            },
+            {
+              "tag": "add",
+              "text": "test('stores and returns', () => {"
+            },
+            {
+              "tag": "add",
+              "text": "  const store = new Store();"
+            },
+            {
+              "tag": "add",
+              "text": "  expect(store.get('a')).toBeUndefined();"
+            },
+            {
+              "tag": "add",
+              "text": "});"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "seq": 8,
+      "t_ms": 61000,
+      "kind": "test_run",
+      "cmd": "cargo test",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 1,
+      "total": 14,
+      "ok": true,
+      "prompt_id": "p-6"
+    },
+    {
+      "seq": 9,
+      "t_ms": 64000,
+      "kind": "command",
+      "cmd": "cargo fmt --check",
+      "exit_code": 0,
+      "duration_ms": 900,
+      "source": "exec",
+      "prompt_id": "p-6"
+    },
+    {
+      "seq": 10,
+      "t_ms": 80000,
+      "kind": "prompt",
+      "id": "p-10",
+      "text": "thanks, run the linter too",
+      "source": "mark"
+    },
+    {
+      "seq": 11,
+      "t_ms": 85000,
+      "kind": "command",
+      "cmd": "cargo clippy --all-targets -- -D warnings",
+      "exit_code": 0,
+      "duration_ms": 4200,
+      "source": "exec",
+      "prompt_id": "p-10"
+    },
+    {
+      "seq": 12,
+      "t_ms": 96000,
+      "kind": "test_run",
+      "cmd": "cargo test",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 1,
+      "total": 14,
+      "ok": true,
+      "prompt_id": "p-10"
+    },
+    {
+      "seq": 13,
+      "t_ms": 96000,
+      "kind": "session_end"
+    }
+  ],
+  "incidents": [],
+  "files": {
+    "src/checkout.ts": {
+      "churn": 1,
+      "prompts": [
+        "p-2"
+      ],
+      "ops": {
+        "modify": 1
+      }
+    },
+    "src/store.test.ts": {
+      "churn": 1,
+      "prompts": [
+        "p-6"
+      ],
+      "ops": {
+        "create": 1
+      }
+    },
+    "src/store.ts": {
+      "churn": 1,
+      "prompts": [
+        "p-2"
+      ],
+      "ops": {
+        "create": 1
+      }
+    }
+  },
+  "stats": {
+    "steps": 14,
+    "files_touched": 3,
+    "commands": 2,
+    "test_runs": 3,
+    "incidents_by_kind": {},
+    "tests_first_ok": true,
+    "tests_last_ok": true
+  }
+}

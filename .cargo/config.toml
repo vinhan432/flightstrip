@@ -1,0 +1,25 @@
+# Build environment for THIS machine (Windows 11, no MSVC build tools, no mingw
+# binutils, therefore no `dlltool`).
+#
+# The default x86_64-pc-windows-gnu host cannot link anything here: any crate
+# using `windows-link`/raw-dylib makes rustc call `dlltool`, which does not exist
+# on this box. The windows-gnullvm host uses `rust-lld`, which handles raw-dylib
+# imports itself.
+#
+# Two shims are needed on top of that:
+#   * `link-self-contained=yes` so the gnullvm CRT objects are used, and
+#   * a trailing `-L` to the *gnu* sysroot, because rustc's gnullvm link line
+#     asks for advapi32/ole32/oleaut32 import libraries that the gnullvm sysroot
+#     does not ship. Appending it last means the gnullvm libs win and only the
+#     three missing DLLs fall through.
+#
+# The toolchain itself is selected with a directory override (not committed):
+#   rustup override set stable-x86_64-pc-windows-gnullvm
+#
+# Nothing here applies to Linux/macOS or to a normal MSVC Windows setup.
+[target.x86_64-pc-windows-gnullvm]
+linker = "C:/Users/Admin/.rustup/toolchains/stable-x86_64-pc-windows-gnullvm/lib/rustlib/x86_64-pc-windows-gnullvm/bin/rust-lld.exe"
+rustflags = [
+  "-C", "link-self-contained=yes",
+  "-C", "link-arg=-LC:/Users/Admin/.rustup/toolchains/stable-x86_64-pc-windows-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/self-contained",
+]
