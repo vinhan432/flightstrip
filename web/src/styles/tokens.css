@@ -1,0 +1,65 @@
+/* Flightstrip — design tokens.
+   The palette is an aviation instrument: warm paper, near-black ink, and
+   exactly one signal colour. Nothing else is allowed to be colourful. */
+
+:root {
+  /* ── the paper ─────────────────────────────────────────────────────── */
+  --paper: #f4efe4;
+  --paper-dark: #e6dfd2;
+
+  /* ── the ink ───────────────────────────────────────────────────────── */
+  --ink: #1c1917;
+  --ink-light: #78716c;
+  --ink-faint: #c4b9a8;
+
+  /* ── the signal ────────────────────────────────────────────────────── */
+  --orange: #d4621a;
+  --orange-glow: #ff8c42;
+  --orange-wash: rgba(212, 98, 26, 0.08);
+
+  /* ── state, used only where it means something ─────────────────────── */
+  --red: #b91c1c;
+  --red-wash: rgba(185, 28, 28, 0.09);
+  --green: #15803d;
+  --green-muted: #bbf7d0;
+  --green-wash: rgba(21, 128, 61, 0.09);
+
+  /* ── type ──────────────────────────────────────────────────────────── */
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas,
+    monospace;
+
+  /* ── rhythm ────────────────────────────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* ── form ──────────────────────────────────────────────────────────── */
+  --radius-sm: 3px;
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  --rule: 1px solid var(--ink-faint);
+  --shadow-plate: 0 1px 0 rgba(28, 25, 23, 0.05),
+    0 14px 30px -20px rgba(28, 25, 23, 0.45);
+  --shadow-lift: 0 2px 0 rgba(28, 25, 23, 0.06),
+    0 22px 44px -26px rgba(28, 25, 23, 0.5);
+
+  /* ── motion ────────────────────────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ── chart geometry (read by layout.ts too) ────────────────────────── */
+  --track-axis: 32px;
+  --track-prompts: 48px;
+  --track-files: 100px;
+  --track-tests: 48px;
+  --track-commands: 32px;
+  --track-incidents: 48px;
+}

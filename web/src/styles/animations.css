@@ -1,0 +1,169 @@
+/* The motion language: ink drawing in, a stamp dropping, a pen tracing.
+   Every animation here has a static counterpart under reduced motion. */
+
+@keyframes ink-draw {
+  from {
+    stroke-dashoffset: var(--path-length, 1000);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes stamp-drop {
+  0% {
+    transform: scale(1.3) rotate(-5deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.95) rotate(1deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes pen-trail {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-5px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 98, 26, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px rgba(212, 98, 26, 0.15);
+  }
+}
+
+@keyframes ripple {
+  from {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* The hero heading, revealed letter by letter. */
+@keyframes letter-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.12em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* A skeleton block, pulsing while a session loads. */
+@keyframes skeleton {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ── applied classes ──────────────────────────────────────────────────── */
+
+.reveal {
+  opacity: 0;
+}
+
+.reveal.is-visible {
+  animation: fade-up 600ms var(--ease-out) forwards;
+}
+
+.stamp-in {
+  animation: stamp-drop 420ms var(--ease-out) both;
+}
+
+.shake {
+  animation: shake 320ms ease-in-out;
+}
+
+.blink {
+  animation: blink 1.4s steps(1, end) infinite;
+}
+
+.skeleton {
+  background: var(--paper-dark);
+  border-radius: var(--radius-sm);
+  animation: skeleton 1.6s ease-in-out infinite;
+}
+
+/* ── reduced motion: everything static ────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .reveal {
+    opacity: 1;
+  }
+
+  .blink {
+    animation: none;
+    opacity: 1;
+  }
+}

@@ -3,107 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Flightstrip — replay an agent session</title>
+    <title>Flightstrip — see what your AI agent actually did</title>
     <meta
       name="description"
-      content="A flight recorder for AI coding agents. Replay a recorded session as a paper strip chart: file changes, commands, test runs and the incidents they add up to."
+      content="A flight recorder for AI coding agents. Replay a recorded session as a paper strip chart: every file change, command and test run, and the incidents they add up to."
     />
-    <link rel="stylesheet" href="style.css" />
+    <meta name="color-scheme" content="light" />
   </head>
   <body>
-    <header class="masthead">
-      <div class="brand">
-        <span class="mark" aria-hidden="true"></span>
-        <div>
-          <h1>Flightstrip</h1>
-          <p class="tagline">A flight recorder for AI coding agents</p>
-        </div>
-      </div>
-
-      <div class="pickers">
-        <label class="field">
-          <span class="field-label">Session</span>
-          <select id="session-select" aria-label="Choose a recorded session"></select>
-        </label>
-        <button id="load-file" class="ghost" type="button">Open session.json…</button>
-        <input id="file-input" type="file" accept="application/json,.json" hidden />
-      </div>
-    </header>
-
-    <section class="session-head" aria-live="polite">
-      <h2 id="session-title">Loading…</h2>
-      <p id="session-meta" class="meta"></p>
-      <ul id="verdict" class="verdict" aria-label="Incident totals"></ul>
-    </section>
-
-    <section class="replay" aria-label="Replay controls">
-      <div class="transport">
-        <button id="play" class="play" type="button" aria-label="Play or pause the replay">
-          <span id="play-icon">▶</span>
-        </button>
-        <button id="restart" class="ghost small" type="button">↺ Start</button>
-        <label class="scrub">
-          <span class="visually-hidden">Scrub through the session</span>
-          <input id="scrub" type="range" min="0" max="1000" value="0" />
-        </label>
-        <div class="clock">
-          <span id="clock">0:00</span>
-          <span class="clock-total" id="clock-total">/ 0:00</span>
-        </div>
-        <div class="speeds" role="group" aria-label="Playback speed">
-          <button class="speed" data-speed="1" type="button">1×</button>
-          <button class="speed is-active" data-speed="8" type="button">8×</button>
-          <button class="speed" data-speed="60" type="button">60×</button>
-        </div>
-      </div>
-
-      <div class="tape-wrap">
-        <div id="tape" class="tape" role="img" aria-label="Strip chart of the session"></div>
-        <div id="tape-legend" class="tape-legend"></div>
-      </div>
-    </section>
-
-    <main class="columns">
-      <section class="timeline" aria-label="Steps">
-        <div class="section-head">
-          <h3>Steps</h3>
-          <p class="hint">Click a step to inspect it. ↑ ↓ moves between steps.</p>
-        </div>
-        <ol id="steps" class="steps"></ol>
-      </section>
-
-      <aside id="detail" class="detail" aria-live="polite" aria-label="Step detail">
-        <p class="detail-empty">Pick a step on the tape or in the list to see its diff.</p>
-      </aside>
-    </main>
-
-    <section class="files" aria-label="Files touched">
-      <div class="section-head">
-        <h3>Files touched</h3>
-        <p class="hint" id="files-hint"></p>
-      </div>
-      <table class="file-table">
-        <thead>
-          <tr>
-            <th scope="col">Path</th>
-            <th scope="col" class="num">Changes</th>
-            <th scope="col">Ops</th>
-            <th scope="col">Prompts</th>
-          </tr>
-        </thead>
-        <tbody id="files-body"></tbody>
-      </table>
-    </section>
-
-    <footer class="foot">
-      <p>
-        Detectors are deterministic rules over the recording — no model, no
-        judgement of correctness. Prompt attribution is a heuristic: work is
-        credited to the most recent prompt unless it arrives more than five
-        minutes later with no command in between.
-      </p>
-    </footer>
-
-    <script src="app.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,0 +1,100 @@
+/* Three type roles, and nothing else.
+   display — headings, Space Grotesk, tight tracking.
+   mono    — data and body, IBM Plex Mono.
+   stamp   — instrument labels, Space Grotesk, uppercase, wide tracking. */
+
+body {
+  font-family: var(--font-mono);
+  font-weight: 300;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+h1,
+h2,
+h3,
+h4,
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+}
+
+h1 {
+  font-size: clamp(2.5rem, 7.5vw, 6.5rem);
+  line-height: 0.94;
+}
+
+h2 {
+  font-size: clamp(1.75rem, 4vw, 3rem);
+}
+
+h3 {
+  font-size: clamp(1.1rem, 2vw, 1.5rem);
+}
+
+p {
+  max-width: 68ch;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-weight: 400;
+}
+
+.stamp {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.72rem;
+  color: var(--ink-light);
+}
+
+.data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.muted {
+  color: var(--ink-light);
+}
+
+.faint {
+  color: var(--ink-faint);
+}
+
+.signal {
+  color: var(--orange);
+}
+
+.lede {
+  font-size: clamp(0.95rem, 1.6vw, 1.15rem);
+  line-height: 1.6;
+  color: var(--ink-light);
+}
+
+/* Section headings share one treatment: a stamp plus a rule that draws in. */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.section-head .rule {
+  flex: 1;
+  height: 1px;
+  background: var(--ink-faint);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 900ms var(--ease-out);
+}
+
+.section-head.is-visible .rule,
+.section-head .rule.is-drawn {
+  transform: scaleX(1);
+}

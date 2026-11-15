@@ -1,3 +1,7 @@
 /target
 /.flightstrip
 node_modules
+.superpowers/
+web/node_modules
+web/dist
+web/public/sessions/

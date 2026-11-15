@@ -1,0 +1,84 @@
+/* Paper: the grain, the rules, the vignette.
+   The page should read as a physical instrument panel, not a screen. */
+
+/* Faint horizontal ruled lines, like graph paper. Fixed so the paper
+   feels like it sits behind the content rather than scrolling with it. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 27px,
+    rgba(196, 185, 168, 0.22) 27px,
+    rgba(196, 185, 168, 0.22) 28px
+  );
+}
+
+/* Paper grain. An inline SVG fractal-noise filter at 3% opacity. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Everything real sits above the texture. */
+#root {
+  position: relative;
+  z-index: 2;
+}
+
+/* The hero vignette: a warm pool of light, darker at the edges. */
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      120% 90% at 50% 12%,
+      rgba(251, 247, 236, 0.9) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      100% 100% at 50% 50%,
+      transparent 55%,
+      rgba(28, 25, 23, 0.07) 100%
+    );
+}
+
+/* A recessed panel: used for instrument plates and the chart well. */
+.plate {
+  background: var(--paper-dark);
+  border: 1px solid var(--ink-faint);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-plate);
+}
+
+/* A raised card: used for the briefing cards and the report. */
+.card {
+  background: var(--paper);
+  border: 1px solid var(--ink-faint);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-plate);
+}
+
+/* Ink rule, used as a section divider. */
+.ink-rule {
+  height: 1px;
+  background: var(--ink-faint);
+  border: 0;
+}
+
+@media print {
+  body::before,
+  body::after {
+    display: none;
+  }
+}
