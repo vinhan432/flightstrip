@@ -102,7 +102,7 @@ export function CVRPanel({
       </p>
 
       {incident && (
-        <div className="cvr-blame" style={{ borderLeftColor: "var(--red)" }}>
+        <div className="cvr-blame is-incident" style={{ background: "var(--red-wash)" }}>
           <strong>{incidentLabel(incident.kind)}</strong>
           <p style={{ marginTop: "6px" }}>{incident.evidence}</p>
           <p className="muted" style={{ marginTop: "6px", fontSize: "0.78rem" }}>

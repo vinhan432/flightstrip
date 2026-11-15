@@ -322,12 +322,44 @@ section {
   margin-bottom: var(--space-4);
 }
 
+/* A callout in the drawer. Deliberately not a side-tab: a full hairline
+   border with a small orange registration tick in the corner, the way an
+   instrument panel marks an annotation. */
 .cvr-blame {
+  position: relative;
   margin: var(--space-4) 0;
-  padding: var(--space-3);
-  border-left: 3px solid var(--orange);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--ink-faint);
   background: var(--orange-wash);
   font-size: 0.82rem;
+}
+
+.cvr-blame::before,
+.cvr-blame::after {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-color: var(--orange);
+  border-style: solid;
+}
+
+.cvr-blame::before {
+  top: -1px;
+  left: -1px;
+  border-width: 2px 0 0 2px;
+}
+
+.cvr-blame::after {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 2px 2px 0;
+}
+
+/* An incident callout ticks red; a prompt-blame callout ticks orange. */
+.cvr-blame.is-incident::before,
+.cvr-blame.is-incident::after {
+  border-color: var(--red);
 }
 
 /* ── diff ─────────────────────────────────────────────────────────────── */
