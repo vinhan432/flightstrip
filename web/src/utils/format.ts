@@ -32,6 +32,24 @@ export function promptText(session: Session, id: string | undefined): string {
   return session.prompts.find((p) => p.id === id)?.text ?? "";
 }
 
+/**
+ * The 1-based number a prompt is shown as ("Caused by prompt #3"), or null
+ * when the id is unknown. Numbering follows the `prompts` array, which is the
+ * order the recorder emitted them in.
+ */
+export function promptNumber(session: Session, id: string | undefined): number | null {
+  if (!id) return null;
+  const index = session.prompts.findIndex((p) => p.id === id);
+  return index === -1 ? null : index + 1;
+}
+
+/** The step a prompt was issued at, for a "jump to the prompt" action. */
+export function promptStep(session: Session, id: string | undefined): number | null {
+  if (!id) return null;
+  const prompt = session.prompts.find((p) => p.id === id);
+  return prompt ? prompt.step : null;
+}
+
 export interface FileRow {
   path: string;
   churn: number;

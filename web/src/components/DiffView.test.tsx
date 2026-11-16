@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { DiffView } from "./DiffView";
 import type { Session } from "../types";
 import weakened from "../../../fixtures/weakened-tests.json";
@@ -29,5 +29,34 @@ describe("DiffView", () => {
   it("renders a message for an empty hunk list", () => {
     const { container } = render(<DiffView hunks={[]} />);
     expect(container.textContent).toContain("No diff");
+  });
+
+  it("truncates a long diff and offers the full one", () => {
+    const lines = Array.from({ length: 80 }, (_, i) => ({
+      tag: "add" as const,
+      text: `line ${i}`,
+    }));
+    const hunks = [{ old_start: 1, new_start: 1, lines }];
+
+    const { container } = render(<DiffView hunks={hunks} />);
+
+    // 60 rows plus the truncation marker.
+    expect(container.querySelectorAll("tr.add").length).toBe(60);
+    expect(container.querySelector("tr.diff-truncated")).not.toBeNull();
+    expect(screen.getByText(/show full diff/i)).toBeTruthy();
+  });
+
+  it("shows every line once expanded", () => {
+    const lines = Array.from({ length: 80 }, (_, i) => ({
+      tag: "add" as const,
+      text: `line ${i}`,
+    }));
+    const hunks = [{ old_start: 1, new_start: 1, lines }];
+
+    const { container } = render(<DiffView hunks={hunks} />);
+    fireEvent.click(screen.getByText(/show full diff/i));
+
+    expect(container.querySelectorAll("tr.add").length).toBe(80);
+    expect(container.querySelector("tr.diff-truncated")).toBeNull();
   });
 });

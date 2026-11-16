@@ -47,8 +47,24 @@ back/forward work with no extra bookkeeping.
   downsample to 2,400 points takes **0.26 ms**; the full view holds 120
   prompts + 120 commands + 120 tests, and a 50× zoom culls that to 7 each.
 
-## Incident stamp
+## The CVR drawer
 
+One drawer, three shapes, by breakpoint: a sticky right drawer on desktop, a
+bottom sheet at ≤1023px, a full-screen overlay at ≤767px. It is a
+`role="complementary"` region with a real focus trap — Tab cycles inside it,
+Escape closes, and focus returns to whatever opened it.
+
+Contents by event kind: the incident (evidence + why it matters + a severity
+tag that is text, not just colour), prompt blame ("Caused by prompt #3" with
+the quoted text and a jump button), a facts list (operation, line counts,
+before/after hashes, exit code, duration, pass/fail/skip counts), the diff,
+and a ±5-step transcript where every row is a button.
+
+The blame callout is deliberately not a side-tab accent border — that is the
+most recognisable AI-UI tell. It uses a full hairline border with corner
+registration ticks, red for incidents and orange for prompt blame.
+
+## Incident stamp
 Every incident marker is present from the start — the recording is a finished
 artifact, so the incident track must never read as empty. Each triangle stamps
 in (a 420ms `stamp-drop`) as the pen reaches it during playback. The stamp uses

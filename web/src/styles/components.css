@@ -314,7 +314,7 @@ section {
 }
 
 .cvr.is-open {
-  animation: fade-up 300ms var(--ease-out) both;
+  animation: drawer-in 300ms var(--ease-out) both;
 }
 
 .cvr-head {
@@ -365,6 +365,114 @@ section {
   border-color: var(--red);
 }
 
+.cvr-blame.is-incident {
+  background: var(--red-wash);
+}
+
+.cvr-meta {
+  font-size: 0.78rem;
+  margin-bottom: var(--space-2);
+}
+
+.cvr-why {
+  margin-top: 6px;
+  font-size: 0.78rem;
+}
+
+.cvr-jump {
+  margin-top: var(--space-3);
+}
+
+/* A facts list: label in the margin, value in the body. Reads like a form
+   on a clipboard rather than a stack of cards. */
+.cvr-facts {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 4px var(--space-3);
+  margin: var(--space-4) 0 0;
+  font-size: 0.78rem;
+}
+
+.cvr-facts dt {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.58rem;
+  color: var(--ink-light);
+  padding-top: 2px;
+}
+
+.cvr-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The transcript: a ruler of surrounding steps, each a real button. */
+.cvr-transcript {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cvr-transcript li {
+  border-bottom: 1px dashed var(--ink-faint);
+}
+
+.cvr-transcript li:last-child {
+  border-bottom: 0;
+}
+
+.cvr-transcript button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 0;
+  font-size: 0.78rem;
+  color: var(--ink-light);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.cvr-transcript button:hover {
+  color: var(--ink);
+}
+
+.cvr-transcript li.is-active button {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.cvr-transcript li.is-active button::before {
+  content: "▸ ";
+  color: var(--orange);
+}
+
+/* A severity tag: shape and text, never colour alone. */
+.sev-tag {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.56rem;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.sev-info {
+  color: var(--ink-light);
+}
+
+.sev-warn {
+  color: var(--orange);
+}
+
+.sev-critical {
+  color: var(--red);
+}
+
 /* ── diff ─────────────────────────────────────────────────────────────── */
 
 .diff {
@@ -411,6 +519,21 @@ section {
 
 .diff tr.remove .mark {
   color: var(--red);
+}
+
+/* Inline +/- counts, used outside the diff table. */
+.diff-add-text {
+  color: var(--green);
+}
+
+.diff-remove-text {
+  color: var(--red);
+}
+
+.diff-truncated td {
+  color: var(--ink-light);
+  font-style: italic;
+  background: var(--paper-dark);
 }
 
 /* ── incident report ──────────────────────────────────────────────────── */
@@ -797,9 +920,22 @@ section {
     grid-template-columns: 1fr;
   }
 
+  /* Tablet: the drawer becomes a bottom sheet. */
   .cvr {
-    position: static;
-    max-height: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    max-height: 60vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+    box-shadow: 0 -12px 40px -18px rgba(28, 25, 23, 0.45);
+    z-index: 40;
+  }
+
+  .cvr.is-open {
+    animation: sheet-up 300ms var(--ease-out) both;
   }
 
   .briefing {
@@ -846,6 +982,23 @@ section {
 
   .desktop-only {
     display: none;
+  }
+
+  /* Mobile: the drawer is a full-screen overlay. */
+  .cvr {
+    top: 0;
+    max-height: none;
+    border-radius: 0;
+    border: 0;
+    padding-top: var(--space-6);
+  }
+
+  .cvr.is-open {
+    animation: overlay-in 240ms var(--ease-out) both;
+  }
+
+  .cvr-facts {
+    grid-template-columns: 64px minmax(0, 1fr);
   }
 
   .footer {

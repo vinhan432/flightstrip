@@ -66,6 +66,17 @@ export function DiffView({ hunks, maxLines = DEFAULT_MAX }: Props) {
               <td>{row.text}</td>
             </tr>
           ))}
+
+          {/* A truncation marker, the way a printed diff ends with a rule
+              rather than stopping mid-line with no explanation. */}
+          {truncated && (
+            <tr className="diff-truncated">
+              <td className="ln" />
+              <td className="ln" />
+              <td className="mark">⋯</td>
+              <td>{rows.length - maxLines} more lines not shown</td>
+            </tr>
+          )}
         </tbody>
       </table>
 
@@ -76,7 +87,7 @@ export function DiffView({ hunks, maxLines = DEFAULT_MAX }: Props) {
           style={{ marginTop: "8px" }}
           onClick={() => setExpanded(true)}
         >
-          Show {rows.length - maxLines} more lines
+          Show full diff
         </button>
       )}
     </>
