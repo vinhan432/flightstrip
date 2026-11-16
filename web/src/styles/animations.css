@@ -132,6 +132,20 @@
   animation: stamp-drop 420ms var(--ease-out) both;
 }
 
+/* An incident marker. Always present — the recording is a finished artifact,
+   so the incident track must never read as empty — but it stamps in as the
+   pen reaches it during playback.
+   `transform-box: fill-box` is required: without it an SVG scale() happens
+   about the SVG origin and the triangle flies across the chart. */
+.mark-incident {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.mark-incident.is-stamped {
+  animation: stamp-drop 420ms var(--ease-out) both;
+}
+
 .shake {
   animation: shake 320ms ease-in-out;
 }

@@ -41,8 +41,19 @@ back/forward work with no extra bookkeeping.
   the viewport width.
 - SVG marks are culled to the viewport ± one screen.
 - Particles run at a 30fps cap, pause off-screen and when the tab is hidden.
-- `node scripts/make-synthetic.mjs 3000` writes a 3,000-step session for a
-  stress check. It is gitignored; the site labels it `synthetic`.
+- `npm run synthetic` writes a 3,000-step session for a stress check. It is
+  gitignored; the site labels it `synthetic`.
+- `npm run bench` measures the hot paths. At 3,002 steps / 2,641 churn points:
+  downsample to 2,400 points takes **0.26 ms**; the full view holds 120
+  prompts + 120 commands + 120 tests, and a 50× zoom culls that to 7 each.
+
+## Incident stamp
+
+Every incident marker is present from the start — the recording is a finished
+artifact, so the incident track must never read as empty. Each triangle stamps
+in (a 420ms `stamp-drop`) as the pen reaches it during playback. The stamp uses
+`transform-box: fill-box`; without it an SVG `scale()` happens about the SVG
+origin and the triangle flies across the chart.
 
 ## Known issues / not yet done
 

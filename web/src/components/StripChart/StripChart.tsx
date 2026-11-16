@@ -244,6 +244,7 @@ export function StripChart({
               session={session}
               view={view}
               height={TRACK_HEIGHT.incidents}
+              clockMs={clockMs}
               onSelectIncident={onSelectIncident}
             />
           </g>

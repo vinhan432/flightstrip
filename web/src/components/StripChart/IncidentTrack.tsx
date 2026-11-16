@@ -6,6 +6,8 @@ interface Props {
   session: Session;
   view: View;
   height: number;
+  /** How far the pen has travelled, in session ms. */
+  clockMs: number;
   onSelectIncident: (incidentId: string) => void;
 }
 
@@ -13,8 +15,18 @@ interface Props {
  * Red triangles, one per incident, positioned at the *step* the incident
  * points at. The triangle carries the severity in its fill and the kind in
  * its label, so colour is never the only signal.
+ *
+ * Each triangle stamps in as the pen reaches it during playback. It is never
+ * hidden: the recording is a finished artifact, so the incident track must
+ * read as populated even before the replay gets there.
  */
-export function IncidentTrack({ session, view, height, onSelectIncident }: Props) {
+export function IncidentTrack({
+  session,
+  view,
+  height,
+  clockMs,
+  onSelectIncident,
+}: Props) {
   return (
     <g className="track track-incidents">
       {session.incidents.map((incident, i) => {
@@ -29,10 +41,14 @@ export function IncidentTrack({ session, view, height, onSelectIncident }: Props
         const y = height * 0.42;
         const size = 7;
 
+        // The stamp plays as the pen arrives; the marker is visible either
+        // way, so the track never looks empty.
+        const reached = clockMs >= step.t_ms;
+
         return (
           <g
             key={incident.id}
-            className="mark-incident"
+            className={`mark-incident${reached ? " is-stamped" : ""}`}
             role="button"
             tabIndex={0}
             aria-label={`Incident: ${incident.title} (${incidentLabel(incident.kind)}, ${incident.severity})`}

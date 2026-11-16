@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "prebuild": "node scripts/sync-fixtures.mjs",
     "test": "vitest run",
-    "synthetic": "node scripts/make-synthetic.mjs"
+    "synthetic": "node scripts/make-synthetic.mjs",
+    "bench": "node scripts/bench.mjs"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.1.0",
