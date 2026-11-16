@@ -6,21 +6,38 @@ interface Props {
   height: number;
 }
 
+/** How long the nib's trail lingers behind it, in session milliseconds. */
+const TRAIL_MS = 2000;
+
 /** The nib: an orange triangle that rides the chart at the current time. */
 export function PenHead({ view, clockMs, height }: Props) {
   const x = xFor(clockMs, view);
 
+  // The trail spans the last two seconds of travel, so it stretches when the
+  // session is zoomed in and shrinks when it is zoomed out.
+  const trailX = xFor(Math.max(view.t0, clockMs - TRAIL_MS), view);
+  const trailW = Math.max(0, x - trailX);
+
   return (
     <g className="pen" aria-hidden="true">
-      {/* The trail: a faint wash behind the nib that fades out. */}
-      <rect
-        x={Math.max(0, x - 26)}
-        y={0}
-        width={26}
-        height={height}
-        fill="url(#pen-trail-gradient)"
+      {trailW > 0 && (
+        <rect
+          x={trailX}
+          y={0}
+          width={trailW}
+          height={height}
+          fill="url(#pen-trail-gradient)"
+        />
+      )}
+      <line
+        x1={x}
+        y1={0}
+        x2={x}
+        y2={height}
+        stroke="var(--orange)"
+        strokeWidth={1}
+        opacity={0.5}
       />
-      <line x1={x} y1={0} x2={x} y2={height} stroke="var(--orange)" strokeWidth={1} opacity={0.5} />
       <polygon
         points={`${x},${height / 2 - 6} ${x - 5},${height / 2 + 4} ${x + 5},${height / 2 + 4}`}
         fill="var(--orange)"

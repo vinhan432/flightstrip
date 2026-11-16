@@ -3,43 +3,59 @@ import { parseRoute, routeToHash } from "./useHashRoute";
 
 describe("parseRoute", () => {
   it("parses a session route", () =>
-    expect(parseRoute("#/session/risky-session")).toEqual({
+    expect(parseRoute("#/s/risky-session")).toEqual({
+      kind: "session",
       sessionId: "risky-session",
     }));
 
-  it("parses a focus route", () =>
-    expect(parseRoute("#/session/risky-session/i-0")).toEqual({
+  it("parses a step", () =>
+    expect(parseRoute("#/s/risky-session?step=12")).toEqual({
+      kind: "session",
       sessionId: "risky-session",
-      focus: "i-0",
+      step: 12,
     }));
 
-  it("keeps an unknown focus for the caller to resolve (Review Focus 6)", () =>
-    expect(parseRoute("#/session/risky-session/i-99")).toEqual({
+  it("ignores a non-numeric step", () =>
+    expect(parseRoute("#/s/risky-session?step=abc")).toEqual({
+      kind: "session",
       sessionId: "risky-session",
-      focus: "i-99",
+    }));
+
+  it("parses a report route", () =>
+    expect(parseRoute("#/report/clean")).toEqual({
+      kind: "report",
+      sessionId: "clean",
     }));
 
   it("treats an empty hash as no session", () =>
-    expect(parseRoute("")).toEqual({ sessionId: "" }));
+    expect(parseRoute("")).toEqual({ kind: "session", sessionId: "" }));
 
   it("ignores a bare hash", () =>
-    expect(parseRoute("#")).toEqual({ sessionId: "" }));
+    expect(parseRoute("#")).toEqual({ kind: "session", sessionId: "" }));
 
-  it("ignores a non-session hash", () =>
-    expect(parseRoute("#/other/thing")).toEqual({ sessionId: "" }));
+  it("ignores an unknown route", () =>
+    expect(parseRoute("#/other/thing")).toEqual({
+      kind: "session",
+      sessionId: "",
+    }));
 });
 
 describe("routeToHash", () => {
   it("round-trips a session", () =>
-    expect(routeToHash({ sessionId: "clean" })).toBe("#/session/clean"));
-
-  it("round-trips a focus", () =>
-    expect(routeToHash({ sessionId: "clean", focus: "i-1" })).toBe(
-      "#/session/clean/i-1",
+    expect(routeToHash({ kind: "session", sessionId: "clean" })).toBe(
+      "#/s/clean",
     ));
 
-  it("drops an empty focus", () =>
-    expect(routeToHash({ sessionId: "clean", focus: "" })).toBe(
-      "#/session/clean",
+  it("round-trips a step", () =>
+    expect(routeToHash({ kind: "session", sessionId: "clean", step: 3 })).toBe(
+      "#/s/clean?step=3",
     ));
+
+  it("round-trips a report", () =>
+    expect(routeToHash({ kind: "report", sessionId: "clean" })).toBe(
+      "#/report/clean",
+    ));
+
+  it("drops an empty session", () =>
+    expect(routeToHash({ kind: "session", sessionId: "" })).toBe("#"));
 });

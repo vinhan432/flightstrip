@@ -1,34 +1,50 @@
 // Hash routing. No server rewrites are needed, so a deep link works from any
 // static host.
 //
-// The route is `#/session/<id>` and optionally `#/session/<id>/<focus>`,
-// where `<focus>` is an incident id (`i-0`) or a step index (`12`). Parsing
-// is pure so the "unknown focus" case can be tested without a browser.
+// The format is `#/s/<id>?step=N` for a session (the step is optional) and
+// `#/report/<id>` for the investigation. Parsing is pure so the "unknown
+// step" case can be tested without a browser.
 
 import { useCallback, useEffect, useState } from "react";
 
 export interface Route {
+  kind: "session" | "report";
   sessionId: string;
-  focus?: string;
+  /** The selected step index, when the URL names one. */
+  step?: number;
 }
 
+/** No hash at all: the caller falls back to a default session. */
+export const EMPTY_ROUTE: Route = { kind: "session", sessionId: "" };
+
 export function parseRoute(hash: string): Route {
-  if (!hash) return { sessionId: "" };
+  if (!hash) return EMPTY_ROUTE;
   const clean = hash.startsWith("#") ? hash.slice(1) : hash;
-  const parts = clean.split("/").filter(Boolean);
 
-  // Expect: ["session", "<id>", "<focus>?"]
-  if (parts[0] !== "session" || !parts[1]) return { sessionId: "" };
+  const [path, query] = clean.split("?");
+  const parts = path.split("/").filter(Boolean);
 
-  const route: Route = { sessionId: parts[1] };
-  if (parts[2]) route.focus = parts[2];
-  return route;
+  if (parts[0] === "s" && parts[1]) {
+    const route: Route = { kind: "session", sessionId: parts[1] };
+    const step = new URLSearchParams(query ?? "").get("step");
+    // A non-numeric or negative step is ignored, not an error.
+    if (step !== null && /^\d+$/.test(step)) route.step = Number(step);
+    return route;
+  }
+
+  if (parts[0] === "report" && parts[1]) {
+    return { kind: "report", sessionId: parts[1] };
+  }
+
+  return EMPTY_ROUTE;
 }
 
 export function routeToHash(route: Route): string {
   if (!route.sessionId) return "#";
-  const base = `#/session/${route.sessionId}`;
-  return route.focus ? `${base}/${route.focus}` : base;
+  if (route.kind === "report") return `#/report/${route.sessionId}`;
+
+  const base = `#/s/${route.sessionId}`;
+  return route.step !== undefined ? `${base}?step=${route.step}` : base;
 }
 
 export function useHashRoute(): [Route, (route: Route) => void] {

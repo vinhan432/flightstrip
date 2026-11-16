@@ -35,7 +35,7 @@ const manifest = JSON.stringify([
 ]);
 
 beforeAll(() => {
-  window.location.hash = "#/session/clean";
+  window.location.hash = "#/s/clean";
 
   vi.stubGlobal(
     "fetch",
@@ -104,5 +104,18 @@ describe("deep links", () => {
     expect(reportText()).not.toMatch(/webhook signature check/i);
     // The clean session's verdict, which the risky one never shows.
     expect(reportText()).toMatch(/no incidents detected/i);
+  });
+
+  it("opens the drawer for a step named in the hash", async () => {
+    window.location.hash = "#/s/clean?step=3";
+    render(<App />);
+
+    // The step route opens the CVR drawer without a click.
+    await waitFor(
+      () => {
+        expect(document.querySelector(".cvr.is-open")).not.toBeNull();
+      },
+      { timeout: 4000 },
+    );
   });
 });

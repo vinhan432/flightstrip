@@ -99,7 +99,7 @@ function Page() {
             ? incidents[0]
             : incidents[incidents.length - 1]
           : incidents[index + direction];
-      if (next) openStep(next.step, next);
+      if (next) openStep(next.step);
     },
     [session, focus, openStep],
   );
@@ -128,10 +128,9 @@ function Page() {
 
   const onSelectIncident = useCallback(
     (incident: Incident) => {
-      openStep(incident.step, incident);
-      navigate({ sessionId: route.sessionId, focus: incident.id });
+      openStep(incident.step);
     },
-    [openStep, navigate, route.sessionId],
+    [openStep],
   );
 
   return (
@@ -171,7 +170,7 @@ function Page() {
               onPick={(id) => {
                 played.current = false;
                 void loadSession(id);
-                navigate({ sessionId: id });
+                navigate({ kind: "session", sessionId: id });
               }}
             />
           </div>
@@ -204,6 +203,14 @@ function Page() {
                     onClick={playback.reset}
                   >
                     ↺ Start
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    type="button"
+                    onClick={() => setView((v) => resetView(sessionDomain, v.width))}
+                    aria-label="Fit the whole session on screen"
+                  >
+                    ⤢ Fit
                   </button>
                   <div className="speeds" role="group" aria-label="Playback speed">
                     {[1, 2, 4].map((s) => (
