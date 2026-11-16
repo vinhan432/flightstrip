@@ -192,4 +192,41 @@ mod tests {
             "let hash = \"9f2c1d4a8b7e6f5a4c3b2d1e0f9a8b7c\";"
         ));
     }
+
+    fn detected(path: &str, hunks: &[(DiffTag, &str)]) -> Vec<Incident> {
+        use super::super::test_util::{file_event, StubDiffs};
+        let events = [file_event(0, 10, path, crate::schema::FileOp::Modify)];
+        let diffs = StubDiffs::new().with(0, hunks);
+        let input = DetectInput::new(&events, &diffs);
+        SecretTouched.detect(&input)
+    }
+
+    #[test]
+    fn touching_a_dotenv_is_an_incident_with_no_values() {
+        let found = detected(".env", &[(DiffTag::Add, "API_KEY=hunter2hunter2")]);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].severity, Severity::Critical);
+        assert_eq!(found[0].evidence, ".env");
+        assert!(!found[0].evidence.contains("hunter2"));
+    }
+
+    #[test]
+    fn a_literal_credential_is_reported_and_redacted() {
+        let found = detected(
+            "src/config.ts",
+            &[(DiffTag::Add, "const api_key = \"AKIAIOSFODNN7EXAMPLEKEY\";")],
+        );
+        assert_eq!(found.len(), 1);
+        assert!(!found[0].evidence.contains("AKIAIOSFODNN7EXAMPLEKEY"));
+        assert!(found[0].evidence.contains("REDACTED"));
+    }
+
+    #[test]
+    fn ordinary_code_is_quiet() {
+        let found = detected(
+            "src/config.ts",
+            &[(DiffTag::Add, "const api_key = process.env.API_KEY;")],
+        );
+        assert!(found.is_empty(), "{found:#?}");
+    }
 }

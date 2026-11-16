@@ -110,6 +110,31 @@ fn extract(ecosystem: &str, line: &str) -> Option<String> {
     }
 }
 
+/// Package names added by a change, excluding names that also disappeared from
+/// the same manifest. A version bump looks like `- "pkg": "1.0"` plus
+/// `+ "pkg": "1.1"`; that is an update, not a new dependency.
+fn added_packages(hunks: &[crate::schema::DiffHunk], ecosystem: &str) -> BTreeSet<String> {
+    let mut removed: BTreeSet<String> = BTreeSet::new();
+    let mut added: BTreeSet<String> = BTreeSet::new();
+    for line in hunks.iter().flat_map(|h| h.lines.iter()) {
+        match line.tag {
+            DiffTag::Add => {
+                if let Some(name) = extract(ecosystem, &line.text) {
+                    added.insert(name);
+                }
+            }
+            DiffTag::Remove => {
+                if let Some(name) = extract(ecosystem, &line.text) {
+                    removed.insert(name);
+                }
+            }
+            DiffTag::Context => {}
+        }
+    }
+    added.retain(|name| !removed.contains(name));
+    added
+}
+
 pub struct DependencyAdded;
 
 impl Detector for DependencyAdded {
@@ -132,15 +157,7 @@ impl Detector for DependencyAdded {
                 continue;
             }
 
-            let mut packages: BTreeSet<String> = BTreeSet::new();
-            for line in hunks.iter().flat_map(|h| h.lines.iter()) {
-                if line.tag != DiffTag::Add {
-                    continue;
-                }
-                if let Some(name) = extract(ecosystem, &line.text) {
-                    packages.insert(name);
-                }
-            }
+            let packages = added_packages(hunks, ecosystem);
             if packages.is_empty() {
                 continue;
             }
@@ -232,5 +249,38 @@ mod tests {
     fn ordinary_code_lines_are_not_packages() {
         assert_eq!(key_value("let x = 1;"), None);
         assert_eq!(npm("console.log(\"hi\");"), None);
+    }
+
+    fn detected(path: &str, hunks: &[(DiffTag, &str)]) -> Vec<Incident> {
+        use super::super::test_util::{file_event, StubDiffs};
+        let events = [file_event(0, 10, path, crate::schema::FileOp::Modify)];
+        let diffs = StubDiffs::new().with(0, hunks);
+        let input = DetectInput::new(&events, &diffs);
+        DependencyAdded.detect(&input)
+    }
+
+    #[test]
+    fn a_version_bump_is_not_a_new_dependency() {
+        let found = detected(
+            "package.json",
+            &[
+                (DiffTag::Remove, "    \"left-pad\": \"^1.2.0\","),
+                (DiffTag::Add, "    \"left-pad\": \"^1.3.0\","),
+            ],
+        );
+        assert!(found.is_empty(), "{found:#?}");
+    }
+
+    #[test]
+    fn a_genuinely_new_package_is_reported() {
+        let found = detected(
+            "package.json",
+            &[
+                (DiffTag::Context, "  \"dependencies\": {"),
+                (DiffTag::Add, "    \"left-pad\": \"^1.3.0\","),
+            ],
+        );
+        assert_eq!(found.len(), 1);
+        assert!(found[0].evidence.contains("left-pad"));
     }
 }

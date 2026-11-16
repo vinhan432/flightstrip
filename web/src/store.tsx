@@ -1,6 +1,6 @@
-// One context for the whole page. It owns the loaded session and the
-// selection; the playback clock lives in usePlayback and everything else
-// derives from those two.
+// One context for the whole page. It owns the loaded session; the playback
+// clock lives in usePlayback and the selection in useSession, and everything
+// else derives from those.
 
 import {
   createContext,
@@ -31,9 +31,6 @@ export interface Store {
   session: Session | null;
   status: LoadStatus;
   error: string | null;
-  /** The selected step index, or null. */
-  selectedStep: number | null;
-  selectStep: (index: number | null) => void;
   loadSession: (id: string) => Promise<void>;
   loadFromFile: (file: File) => Promise<void>;
   loadFromText: (text: string, label?: string) => void;
@@ -44,14 +41,12 @@ export interface Store {
 const StoreContext = createContext<Store | null>(null);
 
 const MANIFEST_URL = "sessions/index.json";
-const DEFAULT_SESSION = "risky-session";
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [manifest, setManifest] = useState<SessionManifestEntry[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<LoadStatus>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [selectedStep, setSelectedStep] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
 
@@ -80,7 +75,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSession(result.session);
       setStatus("ready");
       setError(null);
-      setSelectedStep(null);
       showToast(`Session loaded: ${result.session.meta.title || label}`);
     },
     [showToast],
@@ -121,7 +115,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [loadFromText],
   );
 
-  // The catalogue, then the default session.
+  // The catalogue. Which session to load is decided by the route (see
+  // useSession): the store only fetches the list.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -131,8 +126,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const list = (await response.json()) as SessionManifestEntry[];
         if (!cancelled) setManifest(list);
       } catch {
-        // A missing catalogue is not fatal: the Drop Zone still works.
-        if (!cancelled) setManifest([]);
+        // A missing catalogue is not fatal — the Drop Zone still works — but
+        // it must not leave the page silently empty.
+        if (!cancelled) {
+          setManifest([]);
+          setError(
+            "Could not load the session catalogue. Run `npm run build` to generate it, or drop a session.json below.",
+          );
+        }
       }
     })();
     return () => {
@@ -140,21 +141,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (manifest.length === 0) return;
-    void loadSession(DEFAULT_SESSION);
-    // Only on the first catalogue load.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manifest.length]);
-
   const value = useMemo<Store>(
     () => ({
       manifest,
       session,
       status,
       error,
-      selectedStep,
-      selectStep: setSelectedStep,
       loadSession,
       loadFromFile,
       loadFromText,
@@ -166,7 +158,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       session,
       status,
       error,
-      selectedStep,
       loadSession,
       loadFromFile,
       loadFromText,

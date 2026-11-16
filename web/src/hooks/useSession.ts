@@ -32,6 +32,9 @@ export interface SessionView {
   navigate: (route: Route) => void;
 }
 
+/** Loaded when the URL names no session. */
+export const DEFAULT_SESSION_ID = "risky-session";
+
 /**
  * Resolve a route's `focus` against a session. Accepts an incident id
  * (`i-0`) or a step index (`12`). An unknown focus resolves to null, which
@@ -59,7 +62,7 @@ export function resolveFocus(
 }
 
 export function useSession(): SessionView {
-  const { session } = useStore();
+  const { session, loadSession } = useStore();
   const [route, navigate] = useHashRoute();
 
   const duration = session ? domain(session).end : 0;
@@ -69,12 +72,36 @@ export function useSession(): SessionView {
   const [focus, setFocus] = useState<Focus | null>(null);
   const width = view.width;
 
+  // The route names a session; load it. Without this, a deep link such as
+  // `#/session/clean` would show whatever session happened to be loaded
+  // while the URL and the picker both claimed otherwise.
+  //
+  // With no hash at all, fall back to the default so the page is never empty.
+  const { manifest } = useStore();
+  useEffect(() => {
+    if (route.sessionId) {
+      if (session?.meta.id === route.sessionId) return;
+      void loadSession(route.sessionId);
+      return;
+    }
+    if (!session && manifest.length > 0) {
+      const fallback = manifest.find((m) => m.id === DEFAULT_SESSION_ID) ?? manifest[0];
+      if (fallback) {
+        navigate({ sessionId: fallback.id });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.sessionId, session, manifest, loadSession]);
+
   // Reset the view when the session changes.
   useEffect(() => {
     if (!session) return;
     setView({ t0: 0, t1: Math.max(1, duration), width });
     setFocus(null);
-  }, [session, duration, width]);
+    // Deliberately keyed on the session, not the width: a resize must not
+    // discard the user's zoom or close the drawer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, duration]);
 
   // Apply the route's focus once the session is loaded.
   const appliedFocus = useRef<string | null>(null);

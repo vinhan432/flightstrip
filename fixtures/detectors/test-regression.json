@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "meta": {
+    "id": "20261115T090100Z-d2",
+    "title": "Detector: test regression",
+    "agent": "claude-code",
+    "started_at": "2026-11-15T09:01:00.000Z",
+    "duration_ms": 4000,
+    "os": "windows",
+    "repo_name": "checkout-service",
+    "label": "fixture"
+  },
+  "prompts": [
+    {
+      "id": "p-1",
+      "text": "tidy the total helper",
+      "step": 1,
+      "t_ms": 1000,
+      "files_touched": 1,
+      "commands_run": 0,
+      "incidents": 1
+    }
+  ],
+  "steps": [
+    {
+      "seq": 0,
+      "t_ms": 1794733260000,
+      "kind": "session_start",
+      "title": "Detector: test regression",
+      "agent": "claude-code",
+      "os": "windows",
+      "repo_name": "checkout-service"
+    },
+    {
+      "seq": 1,
+      "t_ms": 1000,
+      "kind": "prompt",
+      "id": "p-1",
+      "text": "tidy the total helper",
+      "source": "mark"
+    },
+    {
+      "seq": 2,
+      "t_ms": 2000,
+      "kind": "test_run",
+      "cmd": "cargo test",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "total": 3,
+      "ok": true,
+      "prompt_id": "p-1"
+    },
+    {
+      "seq": 3,
+      "t_ms": 3000,
+      "kind": "file_change",
+      "path": "src/math.rs",
+      "op": "modify",
+      "before_hash": "cb7c26666268f00d3a8f9696a24b29f3",
+      "after_hash": "7b02bbb3ae68f00d3aa3b5ad3761fd75",
+      "lines_added": 1,
+      "lines_removed": 1,
+      "prompt_id": "p-1",
+      "hunks": [
+        {
+          "old_start": 1,
+          "new_start": 1,
+          "lines": [
+            {
+              "tag": "context",
+              "text": "pub fn total(a: i32, b: i32) -> i32 {"
+            },
+            {
+              "tag": "remove",
+              "text": "    a + b"
+            },
+            {
+              "tag": "add",
+              "text": "    a - b"
+            },
+            {
+              "tag": "context",
+              "text": "}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "seq": 4,
+      "t_ms": 4000,
+      "kind": "test_run",
+      "cmd": "cargo test",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "total": 3,
+      "ok": false,
+      "prompt_id": "p-1"
+    },
+    {
+      "seq": 5,
+      "t_ms": 4000,
+      "kind": "session_end"
+    }
+  ],
+  "incidents": [
+    {
+      "id": "test_regression-0001",
+      "kind": "test_regression",
+      "severity": "critical",
+      "step": 4,
+      "t_ms": 4000,
+      "title": "Tests went from passing to failing",
+      "evidence": "cargo test · 2 passed / 1 failed · touched: src/math.rs",
+      "why_it_matters": "This is the signal the whole recording exists for: the suite was green, the agent kept working, and it is red now.",
+      "prompt_id": "p-1",
+      "path": "src/math.rs"
+    }
+  ],
+  "files": {
+    "src/math.rs": {
+      "churn": 1,
+      "prompts": [
+        "p-1"
+      ],
+      "ops": {
+        "modify": 1
+      }
+    }
+  },
+  "stats": {
+    "steps": 6,
+    "files_touched": 1,
+    "commands": 0,
+    "test_runs": 2,
+    "incidents_by_kind": {
+      "test_regression": 1
+    },
+    "tests_first_ok": true,
+    "tests_last_ok": false
+  }
+}

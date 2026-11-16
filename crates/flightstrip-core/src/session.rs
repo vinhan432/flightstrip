@@ -96,7 +96,7 @@ pub fn write_active(root: &Path, id: &str) -> Result<()> {
         fs::create_dir_all(parent).map_err(|e| io_error(parent, e))?;
     }
     let body = format!("{id}\n{}\n", std::process::id());
-    fs::write(&path, body).map_err(|e| io_error(&path, e))
+    crate::write_atomic(&path, body.as_bytes())
 }
 
 pub fn clear_active(root: &Path) {
@@ -171,8 +171,10 @@ impl EventLog {
             label,
         };
         let record_path = dir.join(RECORD_FILE);
-        fs::write(&record_path, json::to_pretty(&record.to_json()) + "\n")
-            .map_err(|e| io_error(&record_path, e))?;
+        crate::write_atomic(
+            &record_path,
+            (json::to_pretty(&record.to_json()) + "\n").as_bytes(),
+        )?;
 
         let mut log = EventLog {
             dir,
@@ -459,6 +461,29 @@ mod tests {
             .unwrap();
         assert_eq!(event.seq, 2);
         assert_eq!(log.events().unwrap().len(), 3);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn malformed_lines_are_skipped_without_losing_the_recording() {
+        let root = std::env::temp_dir().join(format!("fs-session-torn-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let mut log = EventLog::create(&root, "test", None, SessionLabel::Recorded).unwrap();
+        log.mark_prompt("keep me", PromptSource::Mark).unwrap();
+        let dir = log.dir().to_path_buf();
+        drop(log);
+
+        let path = events_path(&dir);
+        let mut body = fs::read_to_string(&path).unwrap();
+        body.push_str("not json at all\n");
+        body.push_str("{\"v\":1,\"seq\":99,\"t_ms\":1,\"kind\":\"unknown_kind\"}\n");
+        body.push_str("{\"v\":1,\"seq\":100,\"t_ms\":2");
+        fs::write(&path, body).unwrap();
+
+        let events = read_events(&dir).unwrap();
+        assert_eq!(events.len(), 2, "start and prompt survive: {events:#?}");
+        assert!(matches!(events[1].kind, EventKind::Prompt(_)));
         let _ = fs::remove_dir_all(&root);
     }
 

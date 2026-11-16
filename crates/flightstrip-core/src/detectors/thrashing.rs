@@ -3,7 +3,7 @@
 
 use super::{incident, DetectInput, Detector};
 use crate::schema::{EventKind, Incident, IncidentKind, Severity};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Changes to one path within one prompt before it counts as thrashing.
 pub const THRESHOLD: u32 = 5;
@@ -22,7 +22,9 @@ impl Detector for Thrashing {
             last_event: u64,
         }
 
-        let mut buckets: HashMap<(String, Option<String>), Bucket> = HashMap::new();
+        // BTreeMap, not HashMap: detector output has to be deterministic even
+        // before `run_all` sorts it, or a test that compares titles flips.
+        let mut buckets: BTreeMap<(String, Option<String>), Bucket> = BTreeMap::new();
         for (step, event) in input.events.iter().enumerate() {
             let EventKind::FileChange(change) = &event.kind else {
                 continue;
@@ -62,5 +64,74 @@ impl Detector for Thrashing {
             ));
         }
         found
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::detectors::test_util::file_event;
+    use crate::detectors::NoDiffs;
+    use crate::schema::{EventKind, FileOp, PromptSource};
+
+    fn with_prompt(events: &mut Vec<crate::schema::Event>, id: &str) {
+        events.push(crate::schema::Event::new(
+            events.len() as u64,
+            0,
+            EventKind::Prompt(crate::schema::Prompt {
+                id: id.to_string(),
+                text: "go".into(),
+                source: PromptSource::Mark,
+            }),
+        ));
+    }
+
+    fn run(events: &[crate::schema::Event]) -> Vec<Incident> {
+        Thrashing.detect(&DetectInput::new(events, &NoDiffs))
+    }
+
+    #[test]
+    fn five_rewrites_of_one_file_inside_one_prompt_is_warned() {
+        let events: Vec<_> = (0..THRESHOLD)
+            .map(|index| file_event(index as u64, index as u64 * 10, "src/a.rs", FileOp::Modify))
+            .collect();
+        let found = run(&events);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].severity, Severity::Warn);
+        assert!(found[0].evidence.contains("5 changes"));
+    }
+
+    #[test]
+    fn four_rewrites_are_still_normal_work() {
+        let events: Vec<_> = (0..THRESHOLD - 1)
+            .map(|index| file_event(index as u64, index as u64 * 10, "src/a.rs", FileOp::Modify))
+            .collect();
+        assert!(run(&events).is_empty());
+    }
+
+    #[test]
+    fn rewrites_split_across_prompts_are_not_thrashing() {
+        let mut events = Vec::new();
+        with_prompt(&mut events, "p-1");
+        for index in 0..3 {
+            events.push(file_event(
+                events.len() as u64,
+                index,
+                "src/a.rs",
+                FileOp::Modify,
+            ));
+        }
+        with_prompt(&mut events, "p-2");
+        for index in 0..3 {
+            events.push(file_event(
+                events.len() as u64,
+                index,
+                "src/a.rs",
+                FileOp::Modify,
+            ));
+        }
+        let mut attributed = events;
+        crate::attributor::attribute(&mut attributed, crate::attributor::DEFAULT_GAP_MS);
+        assert!(run(&attributed).is_empty());
     }
 }

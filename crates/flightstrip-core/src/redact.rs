@@ -10,6 +10,7 @@
 //! runs. Each pass is deliberately conservative — a false negative shows a
 //! secret, so patterns match on shape rather than on a specific provider.
 
+use crate::paths::is_secret_path;
 use crate::schema::{DiffTag, EventKind, SessionExport};
 use std::collections::HashMap;
 
@@ -245,6 +246,17 @@ pub fn redact_export(export: &mut SessionExport) {
         prompt.text = redact_text(&prompt.text);
     }
     for step in export.steps.iter_mut() {
+        // A .env file's whole point is values that must never leave the
+        // machine. Redacting line by line is not enough: a line like
+        // `FOO=bar` has no recognisable secret shape, but it is still the
+        // contents of a secret-bearing file. Drop the hunks entirely and keep
+        // the path, which is what the reviewer needs to know.
+        if let EventKind::FileChange(change) = &step.kind {
+            if is_secret_path(&change.path) {
+                step.hunks = None;
+                continue;
+            }
+        }
         match &mut step.kind {
             EventKind::Prompt(p) => p.text = redact_text(&p.text),
             EventKind::Command(c) => c.cmd = redact_text(&c.cmd),
@@ -307,5 +319,66 @@ mod tests {
     fn entropy_of_repeated_text_is_low() {
         assert!(shannon_entropy("aaaaaaaaaaaaaaaaaaaaaaaa") < 1.0);
         assert!(shannon_entropy("q7Zx!9pLz#4mWk@2RtYv") > 4.0);
+    }
+
+    #[test]
+    fn every_required_token_shape_is_redacted() {
+        for token in [
+            "sk-abcdefghijklmnop1234",
+            "ghp_abcdefghijklmnop1234",
+            "AKIAIOSFODNN7EXAMPLE",
+            "AIzaSyABCDEFGHIJKLMNOPQRSTUV",
+            "xoxb-1234-abcdefghijklmnop",
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123",
+        ] {
+            let out = redact_text(&format!("token={token}"));
+            assert!(!out.contains(token), "{token} survived: {out}");
+            assert!(out.contains("REDACTED"), "{token}: {out}");
+        }
+    }
+
+    #[test]
+    fn dotenv_hunks_are_removed_entirely() {
+        use crate::schema::*;
+        let mut export = SessionExport {
+            version: 1,
+            meta: SessionMeta {
+                id: "s".into(),
+                title: "t".into(),
+                agent: None,
+                started_at: "2026-01-01T00:00:00.000Z".into(),
+                duration_ms: 1,
+                os: "windows".into(),
+                repo_name: "r".into(),
+                label: SessionLabel::Recorded,
+            },
+            prompts: Vec::new(),
+            steps: vec![ExportStep {
+                seq: 0,
+                t_ms: 1,
+                kind: EventKind::FileChange(FileChange {
+                    path: ".env".into(),
+                    op: FileOp::Modify,
+                    before_hash: None,
+                    after_hash: None,
+                    lines_added: 1,
+                    lines_removed: 0,
+                    prompt_id: None,
+                }),
+                hunks: Some(vec![DiffHunk {
+                    old_start: 1,
+                    new_start: 1,
+                    lines: vec![DiffLine {
+                        tag: DiffTag::Add,
+                        text: "INNOCUOUS=value".into(),
+                    }],
+                }]),
+            }],
+            incidents: Vec::new(),
+            files: std::collections::BTreeMap::new(),
+            stats: SessionStats::default(),
+        };
+        redact_export(&mut export);
+        assert!(export.steps[0].hunks.is_none());
     }
 }

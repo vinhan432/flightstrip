@@ -11,9 +11,12 @@ fn fixtures_dir() -> PathBuf {
 }
 
 fn load(name: &str) -> SessionExport {
-    let path = fixtures_dir().join(name);
+    load_path(&fixtures_dir().join(name))
+}
+
+fn load_path(path: &std::path::Path) -> SessionExport {
     let text =
-        fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        fs::read_to_string(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
     SessionExport::parse(&text).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
@@ -63,6 +66,47 @@ fn every_fixture_matches_the_schema() {
             "{name}: no step carries a diff, the drawer would be empty"
         );
     }
+}
+
+#[test]
+fn every_detector_has_a_minimal_fixture() {
+    let expected = [
+        ("test-weakened.json", IncidentKind::TestWeakened),
+        ("test-regression.json", IncidentKind::TestRegression),
+        ("thrashing.json", IncidentKind::Thrashing),
+        ("dangerous-command.json", IncidentKind::DangerousCommand),
+        ("dependency-added.json", IncidentKind::DependencyAdded),
+        ("secret-touched.json", IncidentKind::SecretTouched),
+    ];
+    for (name, kind) in expected {
+        let session = load_path(&fixtures_dir().join("detectors").join(name));
+        assert_eq!(session.meta.label, SessionLabel::Fixture, "{name}");
+        assert!(!session.prompts.is_empty(), "{name} has no prompt");
+        assert_eq!(
+            session.incidents.len(),
+            1,
+            "{name} should demonstrate exactly its detector: {:#?}",
+            session.incidents
+        );
+        assert_eq!(session.incidents[0].kind, kind, "{name}");
+        assert!(!session.incidents[0].evidence.is_empty(), "{name}");
+        assert!(!session.incidents[0].why_it_matters.is_empty(), "{name}");
+    }
+}
+
+#[test]
+fn a_redacted_secret_fixture_has_no_dotenv_contents() {
+    let mut session = load_path(&fixtures_dir().join("detectors").join("secret-touched.json"));
+    flightstrip_core::redact::redact_export(&mut session);
+    let text = session.to_pretty_string();
+    assert!(!text.contains("NODE_ENV=production"), "{text}");
+    assert!(!text.contains("API_URL="), "{text}");
+    assert!(text.contains(".env"), "the path stays as evidence");
+    assert!(session
+        .steps
+        .iter()
+        .filter_map(|step| step.hunks.as_ref())
+        .all(|hunks| hunks.is_empty()));
 }
 
 #[test]

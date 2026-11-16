@@ -47,9 +47,17 @@ interface Props {
   /** How far the pen has travelled, in session ms. */
   clockMs: number;
   height?: number;
+  /** Vertical offset of the track this trace belongs to. */
+  top?: number;
 }
 
-export function CanvasTrace({ session, view, clockMs, height = TRACK_H }: Props) {
+export function CanvasTrace({
+  session,
+  view,
+  clockMs,
+  height = TRACK_H,
+  top = 0,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const points = useMemo(
@@ -114,7 +122,7 @@ export function CanvasTrace({ session, view, clockMs, height = TRACK_H }: Props)
       ref={canvasRef}
       className="chart-canvas"
       aria-hidden="true"
-      style={{ position: "absolute", left: 0, top: 0 }}
+      style={{ position: "absolute", left: 0, top }}
     />
   );
 }

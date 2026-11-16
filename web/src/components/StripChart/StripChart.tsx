@@ -4,9 +4,17 @@
 // The tracks are laid out on one SVG so the pen head and its trail can span
 // the full height in a single element.
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "../../types";
-import { TRACK_HEIGHT, domain, tFor, type View } from "../../utils/layout";
+import {
+  TRACK_HEIGHT,
+  TRACK_ORDER,
+  trackOffsets,
+  chartHeight,
+  domain,
+  tFor,
+  type View,
+} from "../../utils/layout";
 import { CanvasTrace } from "./CanvasTrace";
 import { TimeAxis } from "./TimeAxis";
 import { PromptTrack } from "./PromptTrack";
@@ -24,8 +32,6 @@ interface Props {
   onSelectIncident: (incidentId: string) => void;
 }
 
-const ORDER = ["axis", "prompts", "files", "tests", "commands", "incidents"] as const;
-
 export function StripChart({
   session,
   view,
@@ -38,25 +44,24 @@ export function StripChart({
   const [panning, setPanning] = useState(false);
   const panState = useRef({ x: 0, t0: 0, t1: 0 });
 
-  const totalHeight = ORDER.reduce((sum, track) => sum + TRACK_HEIGHT[track], 0);
+  const totalHeight = chartHeight();
 
-  // Each track's vertical offset in the stacked chart.
-  const offsets = useMemo(() => {
-    const map: Record<string, number> = {};
-    let y = 0;
-    for (const track of ORDER) {
-      map[track] = y;
-      y += TRACK_HEIGHT[track];
-    }
-    return map;
-  }, []);
+  // Each track's vertical offset in the stacked chart. Shared with the
+  // canvas trace so the two cannot disagree about where a track begins.
+  const offsets = useMemo(trackOffsets, []);
 
   const { start, end } = domain(session);
 
-  const onWheel = useCallback(
-    (event: React.WheelEvent) => {
+  // A native, non-passive wheel listener. React attaches `wheel` passively,
+  // so `event.preventDefault()` inside an onWheel prop is ignored and the
+  // page scrolls while the chart zooms.
+  useEffect(() => {
+    const el = surfaceRef.current;
+    if (!el) return;
+
+    const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const rect = surfaceRef.current?.getBoundingClientRect();
+      const rect = el.getBoundingClientRect();
       if (!rect) return;
 
       const cursorT = tFor(event.clientX - rect.left, view);
@@ -81,9 +86,11 @@ export function StripChart({
       }
 
       onViewChange({ ...view, t0, t1 });
-    },
-    [view, start, end, onViewChange],
-  );
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [view, start, end, onViewChange]);
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent) => {
@@ -130,7 +137,6 @@ export function StripChart({
     <div
       ref={surfaceRef}
       className={`chart-well${panning ? " is-panning" : ""}`}
-      onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endPan}
@@ -139,19 +145,25 @@ export function StripChart({
       aria-label="Session strip chart. Scroll to zoom, drag to pan."
     >
       <div className="chart-surface" style={{ height: totalHeight }}>
+        {/* The canvas sits at the FILES track's offset, not at the top of the
+            surface: otherwise the trace draws across the time and prompt
+            tracks and the files track stays empty. */}
         <CanvasTrace
           session={session}
           view={view}
           clockMs={clockMs}
           height={TRACK_HEIGHT.files}
+          top={offsets.files}
         />
 
+        {/* No aria-hidden here: the track marks inside are focusable buttons,
+            and hiding them from assistive tech while leaving them tabbable is
+            a WCAG 4.1.2 failure. The decorative parts opt out individually. */}
         <svg
           className="chart-overlay"
           width={view.width}
           height={totalHeight}
           viewBox={`0 0 ${view.width} ${totalHeight}`}
-          aria-hidden="true"
         >
           <defs>
             <linearGradient id="pen-trail-gradient" x1="0" x2="1" y1="0" y2="0">
@@ -161,7 +173,7 @@ export function StripChart({
           </defs>
 
           {/* Track separators. */}
-          {ORDER.map((track) => (
+          {TRACK_ORDER.map((track) => (
             <line
               key={track}
               x1={0}
@@ -199,7 +211,7 @@ export function StripChart({
         </svg>
 
         {/* Track labels sit above the SVG so they never intercept a click. */}
-        {ORDER.map((track) => (
+        {TRACK_ORDER.map((track) => (
           <span
             key={track}
             className="track-label stamp"

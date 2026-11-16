@@ -324,7 +324,7 @@
   ],
   "incidents": [
     {
-      "id": "i-0",
+      "id": "test_regression-0001",
       "kind": "test_regression",
       "severity": "critical",
       "step": 4,
@@ -336,7 +336,7 @@
       "path": "src/upload.ts"
     },
     {
-      "id": "i-1",
+      "id": "test_weakened-0001",
       "kind": "test_weakened",
       "severity": "critical",
       "step": 6,
@@ -348,7 +348,7 @@
       "path": "src/upload.test.ts"
     },
     {
-      "id": "i-2",
+      "id": "test_weakened-0002",
       "kind": "test_weakened",
       "severity": "critical",
       "step": 10,

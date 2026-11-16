@@ -18,6 +18,8 @@ import { StoreProvider, useStore } from "./store";
 import { useSession } from "./hooks/useSession";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { formatClock } from "./utils/format";
+import { zoomView, resetView } from "./utils/view";
+import { domain } from "./utils/layout";
 import type { Incident } from "./types";
 
 function Page() {
@@ -27,7 +29,6 @@ function Page() {
     status,
     error,
     loadSession,
-    loadFromFile,
     loadFromText,
     toast,
     showToast,
@@ -46,6 +47,12 @@ function Page() {
 
   const chartRef = useRef<HTMLDivElement | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  // The session's full time range, for the keyboard zoom and reset.
+  const sessionDomain = useMemo(
+    () => (session ? domain(session) : { start: 0, end: 1 }),
+    [session],
+  );
 
   // The chart's rendered width drives the view's coordinate space.
   useEffect(() => {
@@ -104,18 +111,18 @@ function Page() {
       ArrowLeft: () => playback.step(-1),
       j: () => nextIncident(1),
       k: () => nextIncident(-1),
-      "+": () => setView((v) => zoom(v, 0.8)),
-      "=": () => setView((v) => zoom(v, 0.8)),
-      "-": () => setView((v) => zoom(v, 1.25)),
-      _: () => setView((v) => zoom(v, 1.25)),
-      "0": () => setView((v) => ({ ...v, t0: 0, t1: v.t1 - v.t0 + v.t0 })),
+      "+": () => setView((v) => zoomView(v, 0.8, sessionDomain)),
+      "=": () => setView((v) => zoomView(v, 0.8, sessionDomain)),
+      "-": () => setView((v) => zoomView(v, 1.25, sessionDomain)),
+      _: () => setView((v) => zoomView(v, 1.25, sessionDomain)),
+      "0": () => setView((v) => resetView(sessionDomain, v.width)),
       "?": () => setHelpOpen((open) => !open),
       Escape: () => {
         if (helpOpen) setHelpOpen(false);
         else closeFocus();
       },
     }),
-    [playback, nextIncident, closeFocus, helpOpen, setView],
+    [playback, nextIncident, closeFocus, helpOpen, setView, sessionDomain],
   );
   useKeyboard(keys);
 
@@ -345,31 +352,14 @@ function Page() {
         </div>
       )}
 
-      {/* Screen readers hear the current step as it changes. */}
+      {/* Screen readers hear the selected step, not the ticking clock. */}
       <div className="visually-hidden" aria-live="polite">
-        {session
-          ? `Step ${focus?.stepIndex ?? 0} of ${session.steps.length} at ${formatClock(playback.clockMs)}`
+        {session && focus
+          ? `Step ${focus.stepIndex} of ${session.steps.length}: ${session.steps[focus.stepIndex]?.kind.replace(/_/g, " ") ?? ""}`
           : ""}
       </div>
-
-      <input
-        type="file"
-        hidden
-        aria-hidden="true"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) void loadFromFile(file);
-        }}
-      />
     </>
   );
-}
-
-/** Zoom the view around its centre. */
-function zoom(view: { t0: number; t1: number; width: number }, factor: number) {
-  const centre = (view.t0 + view.t1) / 2;
-  const span = Math.max(500, (view.t1 - view.t0) * factor);
-  return { ...view, t0: centre - span / 2, t1: centre + span / 2 };
 }
 
 export function App() {

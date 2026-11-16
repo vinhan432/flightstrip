@@ -12,6 +12,7 @@ mod error;
 mod interrupt;
 
 use crate::error::{Context, Result};
+use flightstrip_core::schema::Severity;
 use flightstrip_core::{paths, session};
 use std::path::{Path, PathBuf};
 
@@ -48,10 +49,15 @@ COMMANDS
               -o, --out PATH      output file (default: inside the session dir)
               --redact            replace secret-looking values
               --attribution-gap-ms MS
-              --fixture           label the export as synthetic
+              --no-hunks          omit diff hunks (smaller, no drawer)
+              --max-hunk-lines N  cap lines per hunk
+              --label recorded|fixture
+              --fixture           alias for --label fixture
 
-  report    Print the markdown trust summary.
+  report    Print the trust summary.
               [SESSION|FILE.json] -o, --out PATH   --redact
+              --format md|github|json
+              --fail-on critical|warn|info   exit non-zero if matched
 
   help      This text.   --version   Print the version.
 
@@ -88,11 +94,16 @@ enum Command {
         redact: bool,
         attribution_gap_ms: u64,
         fixture: bool,
+        no_hunks: bool,
+        max_hunk_lines: Option<usize>,
+        label: Option<flightstrip_core::schema::SessionLabel>,
     },
     Report {
         session: String,
         out: Option<PathBuf>,
         redact: bool,
+        format: cmd::report_cmd::Format,
+        fail_on: Option<Severity>,
     },
     Help,
     Version,
@@ -180,8 +191,21 @@ fn run(argv: Vec<String>) -> Result<i32> {
             redact,
             attribution_gap_ms,
             fixture,
+            no_hunks,
+            max_hunk_lines,
+            label,
         } => {
-            cmd::export_cmd::run(&root, &session, out, redact, attribution_gap_ms, fixture)?;
+            cmd::export_cmd::run(
+                &root,
+                &session,
+                out,
+                redact,
+                attribution_gap_ms,
+                fixture,
+                no_hunks,
+                max_hunk_lines,
+                label,
+            )?;
             Ok(0)
         }
 
@@ -189,9 +213,11 @@ fn run(argv: Vec<String>) -> Result<i32> {
             session,
             out,
             redact,
+            format,
+            fail_on,
         } => {
-            cmd::report_cmd::run(&root, &session, out, redact)?;
-            Ok(0)
+            let gated = cmd::report_cmd::run(&root, &session, out, redact, format, fail_on)?;
+            Ok(if gated { 2 } else { 0 })
         }
     }
 }
@@ -310,6 +336,9 @@ fn parse(args: &[String]) -> Result<Command> {
             let mut redact = false;
             let mut attribution_gap_ms = flightstrip_core::attributor::DEFAULT_GAP_MS;
             let mut fixture = false;
+            let mut no_hunks = false;
+            let mut max_hunk_lines = None;
+            let mut label = None;
             let mut index = 0usize;
             while index < tail.len() {
                 match tail[index].as_str() {
@@ -318,6 +347,23 @@ fn parse(args: &[String]) -> Result<Command> {
                     }
                     "--redact" => redact = true,
                     "--fixture" => fixture = true,
+                    "--no-hunks" => no_hunks = true,
+                    "--max-hunk-lines" => {
+                        let raw = next_value(tail, &mut index, "--max-hunk-lines")?;
+                        max_hunk_lines = Some(raw.parse::<usize>().map_err(|_| {
+                            format!("--max-hunk-lines needs a number, not `{raw}`")
+                        })?);
+                    }
+                    "--label" => {
+                        let raw = next_value(tail, &mut index, "--label")?;
+                        label = Some(match raw.to_ascii_lowercase().as_str() {
+                            "recorded" => flightstrip_core::schema::SessionLabel::Recorded,
+                            "fixture" => flightstrip_core::schema::SessionLabel::Fixture,
+                            other => {
+                                crate::bail!("--label expects recorded or fixture, not `{other}`")
+                            }
+                        });
+                    }
                     "--attribution-gap-ms" => {
                         let raw = next_value(tail, &mut index, "--attribution-gap-ms")?;
                         attribution_gap_ms = raw.parse::<u64>().map_err(|_| {
@@ -343,6 +389,9 @@ fn parse(args: &[String]) -> Result<Command> {
                 redact,
                 attribution_gap_ms,
                 fixture,
+                no_hunks,
+                max_hunk_lines,
+                label,
             })
         }
 
@@ -350,6 +399,8 @@ fn parse(args: &[String]) -> Result<Command> {
             let mut session = None;
             let mut out = None;
             let mut redact = false;
+            let mut format = cmd::report_cmd::Format::Markdown;
+            let mut fail_on = None;
             let mut index = 0usize;
             while index < tail.len() {
                 match tail[index].as_str() {
@@ -357,6 +408,22 @@ fn parse(args: &[String]) -> Result<Command> {
                         out = Some(PathBuf::from(next_value(tail, &mut index, "--out")?))
                     }
                     "--redact" => redact = true,
+                    "--format" => {
+                        format = cmd::report_cmd::Format::parse(&next_value(
+                            tail, &mut index, "--format",
+                        )?)?
+                    }
+                    "--fail-on" => {
+                        let raw = next_value(tail, &mut index, "--fail-on")?;
+                        fail_on = Some(match raw.to_ascii_lowercase().as_str() {
+                            "critical" => Severity::Critical,
+                            "warn" | "warning" => Severity::Warn,
+                            "info" => Severity::Info,
+                            other => crate::bail!(
+                                "--fail-on expects critical, warn or info, not `{other}`"
+                            ),
+                        });
+                    }
                     "--help" | "-h" => return Ok(Command::Help),
                     other if other.starts_with('-') => {
                         crate::bail!("unknown option for report: {other}")
@@ -374,6 +441,8 @@ fn parse(args: &[String]) -> Result<Command> {
                 session: session.unwrap_or_else(|| "latest".to_string()),
                 out,
                 redact,
+                format,
+                fail_on,
             })
         }
 
@@ -399,14 +468,25 @@ fn resolve_root(explicit: Option<&Path>) -> Result<PathBuf> {
         crate::bail!("{} is not a directory", start.display());
     }
 
+    // An explicit `--repo` is authoritative. Walking up from it would silently
+    // record the enclosing repository when the user pointed at a nested one
+    // (a test fixture, a submodule, a scratch repo inside this project).
+    if explicit.is_some() {
+        return Ok(start);
+    }
+    Ok(find_root(start))
+}
+
+/// The nearest ancestor with `.flightstrip` or `.git`, falling back to `start`.
+fn find_root(start: PathBuf) -> PathBuf {
     let mut cursor = start.as_path();
     loop {
         if cursor.join(session::STATE_DIR).is_dir() || cursor.join(".git").exists() {
-            return Ok(cursor.to_path_buf());
+            return cursor.to_path_buf();
         }
         match cursor.parent() {
             Some(parent) => cursor = parent,
-            None => return Ok(start),
+            None => return start,
         }
     }
 }
@@ -425,8 +505,19 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(base.join("repo").join(".git")).unwrap();
         std::fs::create_dir_all(base.join("repo").join("src").join("deep")).unwrap();
-        let found = resolve_root(Some(&base.join("repo").join("src").join("deep"))).unwrap();
+        let found = find_root(paths::clean_path(&base.join("repo").join("src").join("deep")));
         assert!(found.ends_with("repo"), "{}", found.display());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn an_explicit_repo_does_not_walk_up_into_an_enclosing_repo() {
+        let base = std::env::temp_dir().join(format!("fs-cli-nested-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("outer").join(".git")).unwrap();
+        std::fs::create_dir_all(base.join("outer").join("inner")).unwrap();
+        let found = resolve_root(Some(&base.join("outer").join("inner"))).unwrap();
+        assert!(found.ends_with("inner"), "{}", found.display());
         let _ = std::fs::remove_dir_all(&base);
     }
 

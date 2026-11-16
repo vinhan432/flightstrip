@@ -11,9 +11,8 @@ use crate::schema::*;
 use crate::session::{self, read_record};
 use crate::store::SnapshotStore;
 use crate::time;
-use crate::{io_error, json, paths, Error, Result};
+use crate::{json, paths, Error, Result};
 use std::collections::{BTreeMap, HashMap};
-use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Clone)]
@@ -235,11 +234,6 @@ pub fn export(root: &Path, dir: &Path, opts: &ExportOptions) -> Result<SessionEx
 }
 
 pub fn write_session_json(path: &Path, session: &SessionExport) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent).map_err(|e| io_error(parent, e))?;
-        }
-    }
     let text = json::to_pretty(&session.to_json()) + "\n";
-    fs::write(path, text).map_err(|e| io_error(path, e))
+    crate::write_atomic(path, text.as_bytes())
 }

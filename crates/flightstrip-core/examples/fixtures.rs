@@ -389,6 +389,113 @@ fn main() {
         println!("wrote {}", path.display());
     }
 
+    // ── 4. one deliberately small fixture per detector ────────────────────
+    //
+    // The three demo sessions above are realistic and are what the website
+    // renders. These are minimal and live under `fixtures/detectors/` so a
+    // detector test can point at one file and know exactly which rule should
+    // fire. They are still produced by the real exporter, not by hand.
+    {
+        let detectors_dir = out_dir.join("detectors");
+        fs::create_dir_all(&detectors_dir).unwrap();
+
+        // test_weakened: one assertion removed from a test file.
+        let mut s = Session::new(&workspace, "20261115T090000Z-d1", "Detector: test weakened");
+        s.prompt(1_000, "make the failing test pass");
+        s.write(
+            2_000,
+            "tests/basic.rs",
+            Some("#[test]\nfn basic() {\n    assert_eq!(add(1, 1), 2);\n}\n"),
+            Some("#[test]\nfn basic() {\n}\n"),
+        );
+        s.export(&detectors_dir.join("test-weakened.json"));
+
+        // test_regression: green, an edit, then red.
+        let mut s = Session::new(
+            &workspace,
+            "20261115T090100Z-d2",
+            "Detector: test regression",
+        );
+        s.prompt(1_000, "tidy the total helper");
+        s.tests(2_000, "cargo test", 3, 0, 0);
+        s.write(
+            3_000,
+            "src/math.rs",
+            Some("pub fn total(a: i32, b: i32) -> i32 {\n    a + b\n}\n"),
+            Some("pub fn total(a: i32, b: i32) -> i32 {\n    a - b\n}\n"),
+        );
+        s.tests(4_000, "cargo test", 2, 1, 0);
+        s.export(&detectors_dir.join("test-regression.json"));
+
+        // thrashing: the same file rewritten five times under one prompt.
+        let mut s = Session::new(&workspace, "20261115T090200Z-d3", "Detector: thrashing");
+        s.prompt(1_000, "get the signature check working");
+        s.write(
+            2_000,
+            "src/verify.ts",
+            None,
+            Some("export function verify(a: string, b: string) {\n  return false;\n}\n"),
+        );
+        for (index, body) in [
+            "export function verify(a: string, b: string) {\n  return true;\n}\n",
+            "export function verify(a: string, b: string) {\n  return a.length === b.length;\n}\n",
+            "export function verify(a: string, b: string) {\n  return a === b;\n}\n",
+            "export function verify(a: string, b: string) {\n  return hmac(a, b);\n}\n",
+        ]
+        .iter()
+        .enumerate()
+        {
+            s.write(
+                3_000 + index as u64 * 1_000,
+                "src/verify.ts",
+                None,
+                Some(body),
+            );
+        }
+        s.export(&detectors_dir.join("thrashing.json"));
+
+        // dangerous_command: a root-level recursive delete.
+        let mut s = Session::new(
+            &workspace,
+            "20261115T090300Z-d4",
+            "Detector: dangerous command",
+        );
+        s.prompt(1_000, "clean the workspace");
+        s.create(2_000, "src/deploy.sh", "#!/bin/sh\necho deploy\n");
+        s.command(3_000, "rm -rf /", 0, 10);
+        s.export(&detectors_dir.join("dangerous-command.json"));
+
+        // dependency_added: one new package, no version bump.
+        let mut s = Session::new(
+            &workspace,
+            "20261115T090400Z-d5",
+            "Detector: dependency added",
+        );
+        s.prompt(1_000, "add a date formatter");
+        s.write(
+            2_000,
+            "package.json",
+            Some("{\n  \"dependencies\": {}\n}\n"),
+            Some("{\n  \"dependencies\": {\n    \"left-pad\": \"^1.3.0\"\n  }\n}\n"),
+        );
+        s.export(&detectors_dir.join("dependency-added.json"));
+
+        // secret_touched: a .env file is created. The path is the evidence;
+        // the values must not appear in the incident or in a redacted export.
+        let mut s = Session::new(
+            &workspace,
+            "20261115T090500Z-d6",
+            "Detector: secret touched",
+        );
+        s.prompt(1_000, "put the local settings in place");
+        s.create(
+            2_000,
+            ".env",
+            "NODE_ENV=production\nAPI_URL=https://example.test\n",
+        );
+        s.export(&detectors_dir.join("secret-touched.json"));
+    }
+
     let _ = fs::remove_dir_all(&workspace);
     println!("fixtures regenerated in {}", out_dir.display());
 }

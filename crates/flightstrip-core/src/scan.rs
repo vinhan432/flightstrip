@@ -497,6 +497,62 @@ mod tests {
     }
 
     #[test]
+    fn nested_directories_and_paths_with_spaces_are_recorded() {
+        let root = temp_root("spaces");
+        let nested = root.join("a dir").join("deep").join("er");
+        fs::create_dir_all(&nested).unwrap();
+        let mut log = EventLog::create(&root, "w", None, SessionLabel::Recorded).unwrap();
+        let mut recorder = Recorder::new(&root, &mut log, WatchOptions::default());
+        recorder.seed_baseline().unwrap();
+        fs::write(nested.join("a file.txt"), "hello\n").unwrap();
+        assert_eq!(recorder.scan_once().unwrap(), 1);
+        let changes = changes(&log);
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].path, "a dir/deep/er/a file.txt");
+        assert_eq!(changes[0].op, FileOp::Create);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rewriting_the_same_bytes_is_a_touch_not_an_edit() {
+        let root = temp_root("touch");
+        fs::write(root.join("a.txt"), "same\n").unwrap();
+        let mut log = EventLog::create(&root, "w", None, SessionLabel::Recorded).unwrap();
+        let mut recorder = Recorder::new(&root, &mut log, WatchOptions::default());
+        recorder.seed_baseline().unwrap();
+        // Same size and same content, but the write updates the mtime.
+        fs::write(root.join("a.txt"), "same\n").unwrap();
+        recorder.scan_once().unwrap();
+        assert!(changes(&log).is_empty(), "{:#?}", changes(&log));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn target_and_node_modules_are_both_ignored() {
+        let root = temp_root("targets");
+        fs::create_dir_all(root.join("target").join("debug")).unwrap();
+        fs::create_dir_all(root.join("node_modules").join("pkg")).unwrap();
+        fs::write(root.join("target/debug/a.o"), "x").unwrap();
+        fs::write(root.join("node_modules/pkg/a.js"), "x").unwrap();
+        fs::write(root.join("src.rs"), "x").unwrap();
+        let mut log = EventLog::create(&root, "w", None, SessionLabel::Recorded).unwrap();
+        let mut recorder = Recorder::new(&root, &mut log, WatchOptions::default());
+        assert_eq!(recorder.seed_baseline().unwrap(), 1);
+        assert_eq!(recorder.scan_once().unwrap(), 1);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_stop_flag_ends_the_loop() {
+        let root = temp_root("stop");
+        let mut log = EventLog::create(&root, "w", None, SessionLabel::Recorded).unwrap();
+        let mut recorder = Recorder::new(&root, &mut log, WatchOptions::default());
+        let stop = AtomicBool::new(true);
+        assert!(recorder.run(&stop).is_ok());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn changes_are_attributed_to_the_latest_prompt() {
         let root = temp_root("prompt");
         let mut log = EventLog::create(&root, "w", None, SessionLabel::Recorded).unwrap();

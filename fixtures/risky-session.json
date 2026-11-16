@@ -577,7 +577,7 @@
   ],
   "incidents": [
     {
-      "id": "i-0",
+      "id": "secret_touched-0001",
       "kind": "secret_touched",
       "severity": "critical",
       "step": 3,
@@ -589,19 +589,7 @@
       "path": "src/verify.ts"
     },
     {
-      "id": "i-1",
-      "kind": "thrashing",
-      "severity": "warn",
-      "step": 11,
-      "t_ms": 72000,
-      "title": "src/verify.ts rewritten 5 times",
-      "evidence": "5 changes to one file inside a single prompt, starting at step 7",
-      "why_it_matters": "Repeated rewrites of the same file usually mean the requirement was ambiguous: the agent tried several shapes because nothing said which one was right.",
-      "prompt_id": "p-6",
-      "path": "src/verify.ts"
-    },
-    {
-      "id": "i-2",
+      "id": "secret_touched-0002",
       "kind": "secret_touched",
       "severity": "critical",
       "step": 11,
@@ -613,7 +601,19 @@
       "path": "src/verify.ts"
     },
     {
-      "id": "i-3",
+      "id": "thrashing-0001",
+      "kind": "thrashing",
+      "severity": "warn",
+      "step": 11,
+      "t_ms": 72000,
+      "title": "src/verify.ts rewritten 5 times",
+      "evidence": "5 changes to one file inside a single prompt, starting at step 7",
+      "why_it_matters": "Repeated rewrites of the same file usually mean the requirement was ambiguous: the agent tried several shapes because nothing said which one was right.",
+      "prompt_id": "p-6",
+      "path": "src/verify.ts"
+    },
+    {
+      "id": "test_weakened-0001",
       "kind": "test_weakened",
       "severity": "critical",
       "step": 12,
@@ -625,7 +625,7 @@
       "path": "src/verify.test.ts"
     },
     {
-      "id": "i-4",
+      "id": "secret_touched-0003",
       "kind": "secret_touched",
       "severity": "critical",
       "step": 15,
@@ -637,19 +637,19 @@
       "path": ".env"
     },
     {
-      "id": "i-5",
+      "id": "dependency_added-0001",
       "kind": "dependency_added",
-      "severity": "warn",
+      "severity": "info",
       "step": 19,
       "t_ms": 140000,
-      "title": "3 packages added",
-      "evidence": "@company/webhook-signer, express, pino",
+      "title": "2 packages added",
+      "evidence": "@company/webhook-signer, pino",
       "why_it_matters": "Every dependency is code that runs with your privileges and needs its own security and maintenance review. Reviewers tend to skip manifest diffs.",
       "prompt_id": "p-17",
       "path": "package.json"
     },
     {
-      "id": "i-6",
+      "id": "dangerous_command-0001",
       "kind": "dangerous_command",
       "severity": "critical",
       "step": 21,

@@ -9,7 +9,29 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 fn cell(text: &str) -> String {
-    text.replace('|', "\\|").replace('\n', " ")
+    text.replace('\r', " ")
+        .replace('\n', " ")
+        .replace('|', "\\|")
+}
+
+/// Inline code that survives a backtick inside the value. A single code span
+/// cannot contain a backtick, so use two and pad with a space.
+fn code(text: &str) -> String {
+    let flat = text.replace('\r', " ").replace('\n', " ");
+    if flat.contains('`') {
+        format!("`` {flat} ``")
+    } else {
+        format!("`{flat}`")
+    }
+}
+
+/// Does this session contain an incident at or above `threshold`? Used by
+/// `report --fail-on` so the command can gate CI without parsing the output.
+pub fn meets_threshold(session: &SessionExport, threshold: Severity) -> bool {
+    session
+        .incidents
+        .iter()
+        .any(|incident| incident.severity >= threshold)
 }
 
 fn pass_fail(value: Option<bool>) -> &'static str {
@@ -114,8 +136,8 @@ pub fn render(session: &SessionExport) -> String {
         .iter()
         .filter_map(|step| match &step.kind {
             EventKind::Command(c) => Some(format!(
-                "- `{}` → {}",
-                c.cmd.trim(),
+                "- {} → {}",
+                code(c.cmd.trim()),
                 c.exit_code
                     .map(|code| code.to_string())
                     .unwrap_or_else(|| "?".into())
@@ -197,6 +219,99 @@ rules, not a judgement of correctness; no model was involved. Session `{}`._",
     out
 }
 
+/// A compact PR comment: verdict, the five incidents that matter most, and the
+/// rest behind a `<details>` fold so a large session cannot take over the
+/// conversation. GitHub renders this exactly like the report body.
+pub fn render_github(session: &SessionExport) -> String {
+    const TOP: usize = 5;
+    let mut out = String::new();
+    let critical = session
+        .incidents
+        .iter()
+        .filter(|i| i.severity == Severity::Critical)
+        .count();
+    let warn = session
+        .incidents
+        .iter()
+        .filter(|i| i.severity == Severity::Warn)
+        .count();
+    let info = session
+        .incidents
+        .iter()
+        .filter(|i| i.severity == Severity::Info)
+        .count();
+
+    let verdict = if critical > 0 {
+        format!("**{critical} critical** · {warn} warning · {info} info")
+    } else if warn > 0 {
+        format!("**{warn} warning** · {info} info")
+    } else {
+        format!("**No blocking incidents** · {info} info")
+    };
+
+    let _ = writeln!(out, "## Flightstrip: {}", session.meta.title);
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "{verdict} · {} · {} prompts · session `{}`",
+        human_duration(session.meta.duration_ms),
+        session.prompts.len(),
+        session.meta.id
+    );
+    let _ = writeln!(out);
+
+    if session.incidents.is_empty() {
+        let _ = writeln!(
+            out,
+            "Nothing matched a rule. That is not the same as safe; it means this session did \
+not trigger a detector."
+        );
+    } else {
+        let _ = writeln!(out, "| Step | Kind | Severity | Evidence |");
+        let _ = writeln!(out, "|------|------|----------|----------|");
+        for incident in session.incidents.iter().take(TOP) {
+            let _ = writeln!(
+                out,
+                "| {} | {} | {} | {} |",
+                incident.step,
+                incident.kind.as_str(),
+                incident.severity.as_str(),
+                cell(&incident.evidence)
+            );
+        }
+        if session.incidents.len() > TOP {
+            let _ = writeln!(out);
+            let _ = writeln!(
+                out,
+                "<details><summary>{} more incident(s)</summary>",
+                session.incidents.len() - TOP
+            );
+            let _ = writeln!(out);
+            let _ = writeln!(out, "| Step | Kind | Severity | Evidence |");
+            let _ = writeln!(out, "|------|------|----------|----------|");
+            for incident in session.incidents.iter().skip(TOP) {
+                let _ = writeln!(
+                    out,
+                    "| {} | {} | {} | {} |",
+                    incident.step,
+                    incident.kind.as_str(),
+                    incident.severity.as_str(),
+                    cell(&incident.evidence)
+                );
+            }
+            let _ = writeln!(out);
+            let _ = writeln!(out, "</details>");
+        }
+    }
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "<sub>Attribution is heuristic. Detectors are deterministic rules, not a judgement of \
+correctness. Recorded by Flightstrip.</sub>"
+    );
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,6 +364,69 @@ mod tests {
         assert!(md.contains("- First run: pass"));
         assert!(md.contains("- Last run: **fail**"));
         assert!(md.contains("1m 05s"));
+    }
+
+    #[test]
+    fn table_cells_cannot_break_the_markdown() {
+        let mut session = sample();
+        session.incidents[0].evidence = "a|b\nc`d".into();
+        let md = render(&session);
+        assert!(md.contains("a\\|b c`d"), "{md}");
+    }
+
+    #[test]
+    fn commands_with_backticks_use_a_double_code_span() {
+        let mut session = sample();
+        session.steps.push(ExportStep {
+            seq: 9,
+            t_ms: 1,
+            kind: EventKind::Command(Command {
+                cmd: "echo `date`".into(),
+                exit_code: Some(0),
+                duration_ms: Some(1),
+                source: CommandSource::Exec,
+                prompt_id: None,
+            }),
+            hunks: None,
+        });
+        let md = render(&session);
+        assert!(md.contains("`` echo `date` ``"), "{md}");
+    }
+
+    #[test]
+    fn github_format_folds_everything_after_five_incidents() {
+        let mut session = sample();
+        session.incidents = (0..7)
+            .map(|index| Incident {
+                id: format!("test_weakened-{index:04}"),
+                kind: IncidentKind::TestWeakened,
+                severity: Severity::Warn,
+                step: index,
+                t_ms: index,
+                title: "t".into(),
+                evidence: format!("e{index}"),
+                why_it_matters: "w".into(),
+                prompt_id: None,
+                path: None,
+            })
+            .collect();
+        let md = render_github(&session);
+        assert!(md.starts_with("## Flightstrip: Fixture"));
+        assert!(
+            md.contains("<details><summary>2 more incident(s)</summary>"),
+            "{md}"
+        );
+        assert!(md.contains("| 6 | test_weakened | warn | e6 |"), "{md}");
+    }
+
+    #[test]
+    fn fail_threshold_uses_severity_ordering() {
+        let mut session = sample();
+        assert!(meets_threshold(&session, Severity::Critical));
+        assert!(meets_threshold(&session, Severity::Warn));
+        session.incidents[0].severity = Severity::Info;
+        assert!(!meets_threshold(&session, Severity::Warn));
+        assert!(meets_threshold(&session, Severity::Info));
     }
 
     #[test]

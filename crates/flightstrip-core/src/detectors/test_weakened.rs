@@ -90,10 +90,21 @@ impl Detector for TestWeakened {
                 continue;
             }
 
+            // Moving an assertion is not removing it. Agents routinely split a
+            // test or move a check into a helper; the same assertion text on an
+            // added line means nothing was weakened. Compare trimmed text so
+            // re-indentation does not matter either.
+            let added_assertions: std::collections::BTreeSet<&str> = hunks
+                .iter()
+                .flat_map(|h| h.lines.iter())
+                .filter(|line| line.tag == DiffTag::Add && is_assertion(&line.text))
+                .map(|line| line.text.trim())
+                .collect();
             let removed: Vec<String> = hunks
                 .iter()
                 .flat_map(|h| h.lines.iter())
                 .filter(|line| line.tag == DiffTag::Remove && is_assertion(&line.text))
+                .filter(|line| !added_assertions.contains(line.text.trim()))
                 .map(|line| line.text.clone())
                 .collect();
             if !removed.is_empty() {
@@ -247,6 +258,56 @@ mod tests {
             run(3, "cargo test", 29),
         ];
         assert_eq!(count_drops(&events), vec!["Test count dropped by 1"]);
+    }
+
+    fn detected(hunks: &[(DiffTag, &str)]) -> Vec<Incident> {
+        use super::super::test_util::{file_event, StubDiffs};
+        let events = [file_event(0, 10, "tests/basic.rs", FileOp::Modify)];
+        let diffs = StubDiffs::new().with(0, hunks);
+        TestWeakened.detect(&DetectInput::new(&events, &diffs))
+    }
+
+    #[test]
+    fn a_removed_assertion_is_reported() {
+        let found = detected(&[(DiffTag::Remove, "  assert_eq!(a, 1);")]);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].severity, Severity::Critical);
+        assert!(found[0].evidence.contains("assert_eq!(a, 1)"));
+    }
+
+    #[test]
+    fn a_moved_assertion_is_not_a_removed_assertion() {
+        let found = detected(&[
+            (DiffTag::Remove, "  assert_eq!(a, 1);"),
+            (DiffTag::Add, "      assert_eq!(a, 1);"),
+        ]);
+        assert!(found.is_empty(), "{found:#?}");
+    }
+
+    #[test]
+    fn a_loosened_assertion_is_still_reported() {
+        let found = detected(&[
+            (DiffTag::Remove, "  expect(a).toBe(1);"),
+            (DiffTag::Add, "  expect(a).toBeTruthy();"),
+        ]);
+        assert_eq!(found.len(), 1);
+        assert!(found[0].evidence.contains("toBe(1)"));
+    }
+
+    #[test]
+    fn an_added_skip_is_reported() {
+        let found = detected(&[(DiffTag::Add, "#[ignore]")]);
+        assert_eq!(found.len(), 1);
+        assert!(found[0].title.contains("skipped"));
+    }
+
+    #[test]
+    fn ordinary_test_changes_are_quiet() {
+        let found = detected(&[
+            (DiffTag::Remove, "  let value = 1;"),
+            (DiffTag::Add, "  let value = 2;"),
+        ]);
+        assert!(found.is_empty(), "{found:#?}");
     }
 
     #[test]

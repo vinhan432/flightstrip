@@ -7,6 +7,7 @@ use flightstrip_core::scan::{Recorder, WatchOptions};
 use flightstrip_core::schema::{EventKind, SessionLabel};
 use flightstrip_core::session::{self, EventLog};
 use std::path::Path;
+use std::sync::atomic::AtomicBool;
 
 pub fn run(
     root: &Path,
@@ -37,11 +38,35 @@ pub fn run(
         format!("{root_name} session")
     });
 
-    let mut log = EventLog::create(root, &title, agent.clone(), SessionLabel::Recorded)
+    interrupt::install().context("while installing the Ctrl+C handler")?;
+    record(
+        root,
+        &title,
+        agent,
+        interval_ms,
+        baseline,
+        verbose,
+        interrupt::flag(),
+    )?;
+    Ok(())
+}
+
+/// The part that owns the session lifecycle. Split out from [`run`] so a test
+/// can stop it with an already-set flag and prove that the active pointer is
+/// removed, which is the part of Ctrl+C handling that matters on disk.
+fn record(
+    root: &Path,
+    title: &str,
+    agent: Option<String>,
+    interval_ms: u64,
+    baseline: bool,
+    verbose: bool,
+    stop: &AtomicBool,
+) -> Result<()> {
+    let mut log = EventLog::create(root, title, agent.clone(), SessionLabel::Recorded)
         .context("while starting the session")?;
     let id = log.id();
     session::write_active(root, &id).context("while claiming the active session")?;
-    interrupt::install().context("while installing the Ctrl+C handler")?;
 
     println!("Flightstrip recorder");
     println!("  session  {id}");
@@ -73,12 +98,14 @@ pub fn run(
             }
         }
         println!("Recording. Ctrl+C to stop.\n");
-        recorder.run(interrupt::flag())
+        recorder.run(stop)
     };
 
     // Close the session whatever happened above: a half-written log with no
     // `session_end` still exports, but a clean one is nicer to read.
     let close_result = log.close();
+    // This is the cleanup that makes a crashed or interrupted recorder safe to
+    // start again. It runs before the close error is reported.
     session::clear_active(root);
     if let Err(error) = recorded {
         eprintln!("warning: the recorder stopped early: {error}");
@@ -102,7 +129,29 @@ pub fn run(
     println!("\nSession closed: {id}");
     println!("  {changes} file changes, {commands} commands, {tests} test runs");
     println!("  export it with: flightstrip export {id} --out session.json");
-
-    // A second Ctrl+C during the summary is not interesting.
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn stopping_the_recorder_closes_the_session_and_clears_active() {
+        let root = std::env::temp_dir().join(format!("fs-watch-stop-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let stop = AtomicBool::new(false);
+        stop.store(true, Ordering::SeqCst);
+        record(&root, "stop test", None, 50, false, false, &stop).unwrap();
+
+        assert!(session::read_active(&root).is_none());
+        let sessions = crate::cmd::all_sessions(&root);
+        assert_eq!(sessions.len(), 1);
+        let events = session::read_events(&sessions[0]).unwrap();
+        assert!(matches!(events.last().unwrap().kind, EventKind::SessionEnd));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

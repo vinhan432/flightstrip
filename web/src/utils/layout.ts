@@ -30,6 +30,38 @@ export const TRACK_HEIGHT: Record<Track, number> = {
   incidents: 48,
 };
 
+/** The tracks, top to bottom. The chart stacks them in this order. */
+export const TRACK_ORDER: Track[] = [
+  "axis",
+  "prompts",
+  "files",
+  "tests",
+  "commands",
+  "incidents",
+];
+
+/**
+ * Each track's vertical offset in the stacked chart, in pixels.
+ *
+ * The canvas trace and the SVG overlay must agree on this: the canvas is
+ * absolutely positioned, so it needs `offsets.files` explicitly or it draws
+ * across the tracks above.
+ */
+export function trackOffsets(): Record<Track, number> {
+  const offsets = {} as Record<Track, number>;
+  let y = 0;
+  for (const track of TRACK_ORDER) {
+    offsets[track] = y;
+    y += TRACK_HEIGHT[track];
+  }
+  return offsets;
+}
+
+/** Total height of the stacked chart. */
+export function chartHeight(): number {
+  return TRACK_ORDER.reduce((sum, track) => sum + TRACK_HEIGHT[track], 0);
+}
+
 /** The visible time window, in session-relative milliseconds. */
 export interface View {
   t0: number;
