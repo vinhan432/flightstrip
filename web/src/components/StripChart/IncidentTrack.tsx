@@ -1,13 +1,14 @@
+import { useEffect, useRef, useState } from "react";
 import type { Session } from "../../types";
 import { xFor, stepForIncident, type View } from "../../utils/layout";
 import { incidentLabel } from "../../utils/format";
+import type { Playback } from "../../hooks/usePlayback";
 
 interface Props {
   session: Session;
   view: View;
   height: number;
-  /** How far the pen has travelled, in session ms. */
-  clockMs: number;
+  playback: Playback;
   onSelectIncident: (incidentId: string) => void;
 }
 
@@ -19,14 +20,36 @@ interface Props {
  * Each triangle stamps in as the pen reaches it during playback. It is never
  * hidden: the recording is a finished artifact, so the incident track must
  * read as populated even before the replay gets there.
+ *
+ * The clock is watched through a subscription that only updates when the SET
+ * of reached incidents changes — a handful of times per replay, not 60 times
+ * a second.
  */
 export function IncidentTrack({
   session,
   view,
   height,
-  clockMs,
+  playback,
   onSelectIncident,
 }: Props) {
+  const [reached, setReached] = useState<Set<string>>(() => new Set());
+  const signature = useRef("");
+
+  useEffect(() => {
+    return playback.subscribe((ms) => {
+      const now = new Set<string>();
+      for (const incident of session.incidents) {
+        const step = stepForIncident(session, incident.step);
+        if (step && ms >= step.t_ms) now.add(incident.id);
+      }
+
+      const next = [...now].sort().join("|");
+      if (next === signature.current) return;
+      signature.current = next;
+      setReached(now);
+    });
+  }, [playback, session]);
+
   return (
     <g className="track track-incidents">
       {session.incidents.map((incident, i) => {
@@ -40,15 +63,12 @@ export function IncidentTrack({
         const critical = incident.severity === "critical";
         const y = height * 0.42;
         const size = 7;
-
-        // The stamp plays as the pen arrives; the marker is visible either
-        // way, so the track never looks empty.
-        const reached = clockMs >= step.t_ms;
+        const stamped = reached.has(incident.id);
 
         return (
           <g
             key={incident.id}
-            className={`mark-incident${reached ? " is-stamped" : ""}`}
+            className={`mark-incident${stamped ? " is-stamped" : ""}`}
             role="button"
             tabIndex={0}
             aria-label={`Incident: ${incident.title} (${incidentLabel(incident.kind)}, ${incident.severity})`}

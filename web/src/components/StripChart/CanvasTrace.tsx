@@ -3,11 +3,16 @@
 // `tracePoints` is pure so the geometry can be tested without a canvas.
 // The drawing adds a small per-point jitter to Y so the line reads as ink
 // rather than as a vector render.
+//
+// The reveal position comes from the playback clock directly, so a tick
+// repaints the canvas without re-rendering the React tree around it.
 
 import { useEffect, useMemo, useRef } from "react";
 import type { Session } from "../../types";
 import { churnSeries, xFor, type View } from "../../utils/layout";
 import { downsample } from "../../utils/downsample";
+import { useClock } from "../../hooks/useClock";
+import type { Playback } from "../../hooks/usePlayback";
 
 export interface TracePt {
   x: number;
@@ -44,8 +49,7 @@ export function tracePoints(
 interface Props {
   session: Session;
   view: View;
-  /** How far the pen has travelled, in session ms. */
-  clockMs: number;
+  playback: Playback;
   height?: number;
   /** Vertical offset of the track this trace belongs to. */
   top?: number;
@@ -54,16 +58,39 @@ interface Props {
 export function CanvasTrace({
   session,
   view,
-  clockMs,
+  playback,
   height = TRACK_H,
   top = 0,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const clockMs = useClock(playback);
 
   const points = useMemo(
     () => tracePoints(session, view, Math.max(200, view.width * 2)),
     [session, view],
   );
+
+  // The jitter is computed once per point set, not per frame. Re-randomising
+  // it on every tick made the ink line shimmer while the pen moved.
+  const jitter = useMemo(
+    () => points.map(() => (Math.random() - 0.5) * 2),
+    [points],
+  );
+
+  // Size the backing store only when the geometry actually changes.
+  // Assigning canvas.width reallocates and clears it, so doing that inside
+  // the per-frame draw was both expensive and a source of flicker.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.max(1, view.width);
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+  }, [view.width, height]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -73,10 +100,7 @@ export function CanvasTrace({
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const width = Math.max(1, view.width);
-    canvas.width = Math.floor(width * dpr);
-    canvas.height = Math.floor(height * dpr);
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
+
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
@@ -92,30 +116,29 @@ export function CanvasTrace({
     ctx.beginPath();
 
     let started = false;
-    for (const point of points) {
+    let tip: TracePt | null = null;
+    for (let i = 0; i < points.length; i++) {
+      const point = points[i];
       if (point.x > revealX) break;
-      // ±1px of jitter: the line should look drawn, not computed.
-      const jitter = (Math.random() - 0.5) * 2;
-      const y = Math.max(1, Math.min(height - 1, point.y + jitter));
+      const y = Math.max(1, Math.min(height - 1, point.y + jitter[i]));
       if (!started) {
         ctx.moveTo(point.x, y);
         started = true;
       } else {
         ctx.lineTo(point.x, y);
       }
+      tip = point;
     }
     if (started) ctx.stroke();
 
     // The last drawn point gets a nib mark so the trace reads as in-progress.
-    const drawn = points.filter((p) => p.x <= revealX);
-    if (drawn.length > 0) {
-      const tip = drawn[drawn.length - 1];
+    if (tip) {
       ctx.fillStyle = "#d4621a";
       ctx.beginPath();
       ctx.arc(tip.x, tip.y, 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [points, view, clockMs, height]);
+  }, [points, jitter, view, clockMs, height]);
 
   return (
     <canvas

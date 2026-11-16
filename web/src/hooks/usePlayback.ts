@@ -1,5 +1,13 @@
 // The playback clock. This hook owns the only requestAnimationFrame loop in
-// the app and the only writer of `clockMs`; everything else derives from it.
+// the app.
+//
+// The clock value is deliberately NOT React state. It ticks ~60 times a
+// second; as state it re-rendered the entire page tree on every frame, which
+// is what made the page stutter. Instead the value lives in a ref and is
+// pushed to subscribers, so only the handful of leaf components that actually
+// draw the clock re-render.
+//
+// `playing` and `speed` DO stay state: they change on a click, not per frame.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "../types";
@@ -37,7 +45,6 @@ export function prevStepTime(session: Session, from: number): number {
 }
 
 export interface Playback {
-  clockMs: number;
   playing: boolean;
   speed: number;
   play: () => void;
@@ -47,29 +54,51 @@ export interface Playback {
   step: (delta: number) => void;
   setSpeed: (speed: number) => void;
   reset: () => void;
+  /** Read the clock without subscribing. */
+  getClock: () => number;
+  /** Subscribe to clock changes; fires immediately, returns an unsubscribe. */
+  subscribe: (listener: (ms: number) => void) => () => void;
 }
 
 export function usePlayback(
   session: Session | null,
   durationMs: number,
 ): Playback {
-  const [clockMs, setClockMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
 
+  const clock = useRef(0);
+  const listeners = useRef(new Set<(ms: number) => void>());
   const frame = useRef(0);
   const last = useRef(0);
-  const clock = useRef(0);
   const speedRef = useRef(speed);
+  const durationRef = useRef(durationMs);
 
   speedRef.current = speed;
+  durationRef.current = durationMs;
+
+  /** Write the clock and push it to every subscriber. */
+  const emit = useCallback((ms: number) => {
+    clock.current = ms;
+    for (const listener of listeners.current) listener(ms);
+  }, []);
+
+  const subscribe = useCallback((listener: (ms: number) => void) => {
+    listeners.current.add(listener);
+    // Hand the newcomer the current value so it paints correctly on mount.
+    listener(clock.current);
+    return () => {
+      listeners.current.delete(listener);
+    };
+  }, []);
+
+  const getClock = useCallback(() => clock.current, []);
 
   // A new session rewinds the clock.
   useEffect(() => {
-    clock.current = 0;
-    setClockMs(0);
+    emit(0);
     setPlaying(false);
-  }, [session]);
+  }, [session, emit]);
 
   useEffect(() => {
     if (!playing) return;
@@ -80,13 +109,15 @@ export function usePlayback(
       const dt = now - last.current;
       last.current = now;
 
-      const next = advance(clock.current, dt, speedRef.current, durationMs);
-      const capped = Math.min(next, durationMs);
+      const duration = durationRef.current;
+      const next = Math.min(
+        advance(clock.current, dt, speedRef.current, duration),
+        duration,
+      );
 
-      clock.current = capped;
-      setClockMs(capped);
+      emit(next);
 
-      if (capped >= durationMs) {
+      if (next >= duration) {
         setPlaying(false);
         return;
       }
@@ -95,16 +126,13 @@ export function usePlayback(
 
     frame.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame.current);
-  }, [playing, durationMs]);
+  }, [playing, durationMs, emit]);
 
   const play = useCallback(() => {
     // Replay from the top when the clock is already at the end.
-    if (clock.current >= durationMs) {
-      clock.current = 0;
-      setClockMs(0);
-    }
+    if (clock.current >= durationRef.current) emit(0);
     setPlaying(true);
-  }, [durationMs]);
+  }, [emit]);
 
   const pause = useCallback(() => setPlaying(false), []);
   const toggle = useCallback(
@@ -114,11 +142,9 @@ export function usePlayback(
 
   const seek = useCallback(
     (ms: number) => {
-      const clamped = Math.max(0, Math.min(ms, durationMs));
-      clock.current = clamped;
-      setClockMs(clamped);
+      emit(Math.max(0, Math.min(ms, durationRef.current)));
     },
-    [durationMs],
+    [emit],
   );
 
   const step = useCallback(
@@ -138,8 +164,9 @@ export function usePlayback(
     setPlaying(false);
   }, [seek]);
 
+  // Stable identity across clock ticks: it depends only on the things that
+  // change on a click. This is what stops the page re-rendering per frame.
   return {
-    clockMs,
     playing,
     speed,
     play,
@@ -149,5 +176,7 @@ export function usePlayback(
     step,
     setSpeed,
     reset,
+    getClock,
+    subscribe,
   };
 }

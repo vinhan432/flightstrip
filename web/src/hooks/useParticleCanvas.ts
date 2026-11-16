@@ -37,15 +37,26 @@ export function useParticleCanvas() {
     let visible = true;
     const mouse = { x: -9999, y: -9999 };
 
+    // The canvas rect is cached rather than measured on every mousemove:
+    // getBoundingClientRect() forces a synchronous layout, and doing that on
+    // every pointer event is a classic source of jank. It is refreshed on
+    // resize and on scroll (the hero is at the top, so scrolling moves it).
+    let rect = { left: 0, top: 0 };
+    const measure = () => {
+      const r = canvas.getBoundingClientRect();
+      rect = { left: r.left, top: r.top };
+    };
+
     const resize = () => {
-      const rect = canvas.getBoundingClientRect();
+      const box = canvas.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      width = Math.max(1, rect.width);
-      height = Math.max(1, rect.height);
+      width = Math.max(1, box.width);
+      height = Math.max(1, box.height);
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       particles = makeParticles(COUNT, width, height);
+      measure();
       draw();
     };
 
@@ -100,7 +111,6 @@ export function useParticleCanvas() {
     };
 
     const onMouseMove = (event: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
       mouse.x = event.clientX - rect.left;
       mouse.y = event.clientY - rect.top;
     };
@@ -133,9 +143,11 @@ export function useParticleCanvas() {
     );
 
     resize();
+    measure();
     observer.observe(canvas);
     window.addEventListener("resize", onResize);
-    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("mousemove", onMouseMove, { passive: true });
     window.addEventListener("mouseleave", onMouseLeave);
     document.addEventListener("visibilitychange", onVisibility);
 
@@ -157,6 +169,7 @@ export function useParticleCanvas() {
       observer.disconnect();
       window.clearTimeout(resizeTimer);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", measure);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseleave", onMouseLeave);
       document.removeEventListener("visibilitychange", onVisibility);

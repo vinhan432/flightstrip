@@ -82,10 +82,27 @@ section {
   transform: translateY(1px);
 }
 
+/* The hero CTA's attention pulse.
+   This animates a pseudo-element's transform and opacity, not the button's
+   box-shadow. Animating box-shadow repaints the button on every frame for
+   as long as the page is open; a composited transform costs nothing. */
 .btn-primary {
+  position: relative;
   background: var(--orange);
   color: var(--paper);
-  animation: pulse-glow 3.4s ease-in-out infinite;
+  isolation: isolate;
+}
+
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--orange);
+  opacity: 0;
+  animation: pulse-halo 3.4s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .btn-primary:hover {
@@ -204,9 +221,8 @@ section {
   user-select: none;
 }
 
-.pen {
-  transition: transform 60ms linear;
-}
+/* The pen is redrawn from the clock every frame; a CSS transition on it
+   would fight the animation and add a style recalculation per frame. */
 
 /* ── scrubber ─────────────────────────────────────────────────────────── */
 

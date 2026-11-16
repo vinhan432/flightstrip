@@ -1,8 +1,10 @@
 import { xFor, type View } from "../../utils/layout";
+import { useClock } from "../../hooks/useClock";
+import type { Playback } from "../../hooks/usePlayback";
 
 interface Props {
   view: View;
-  clockMs: number;
+  playback: Playback;
   height: number;
 }
 
@@ -10,7 +12,10 @@ interface Props {
 const TRAIL_MS = 2000;
 
 /** The nib: an orange triangle that rides the chart at the current time. */
-export function PenHead({ view, clockMs, height }: Props) {
+export function PenHead({ view, playback, height }: Props) {
+  // Subscribes on its own: the nib moves every frame, and nothing else
+  // should re-render because of it.
+  const clockMs = useClock(playback);
   const x = xFor(clockMs, view);
 
   // The trail spans the last two seconds of travel, so it stretches when the

@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "../../types";
+import type { Playback } from "../../hooks/usePlayback";
 import {
   TRACK_HEIGHT,
   TRACK_ORDER,
@@ -26,7 +27,7 @@ import { PenHead } from "./PenHead";
 interface Props {
   session: Session;
   view: View;
-  clockMs: number;
+  playback: Playback;
   onViewChange: (view: View) => void;
   onSelectStep: (index: number) => void;
   onSelectIncident: (incidentId: string) => void;
@@ -35,7 +36,7 @@ interface Props {
 export function StripChart({
   session,
   view,
-  clockMs,
+  playback,
   onViewChange,
   onSelectStep,
   onSelectIncident,
@@ -192,7 +193,7 @@ export function StripChart({
         <CanvasTrace
           session={session}
           view={view}
-          clockMs={clockMs}
+          playback={playback}
           height={TRACK_HEIGHT.files}
           top={offsets.files}
         />
@@ -244,12 +245,12 @@ export function StripChart({
               session={session}
               view={view}
               height={TRACK_HEIGHT.incidents}
-              clockMs={clockMs}
+              playback={playback}
               onSelectIncident={onSelectIncident}
             />
           </g>
 
-          <PenHead view={view} clockMs={clockMs} height={totalHeight} />
+          <PenHead view={view} playback={playback} height={totalHeight} />
         </svg>
 
         {/* Track labels sit above the SVG so they never intercept a click. */}

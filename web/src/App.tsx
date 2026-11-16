@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Hero } from "./components/Hero";
 import { DataPlate } from "./components/DataPlate";
+import { ClockText } from "./components/ClockText";
 import { StripChart } from "./components/StripChart/StripChart";
 import { Scrubber } from "./components/StripChart/Scrubber";
 import { CVRPanel } from "./components/CVRPanel";
@@ -142,7 +143,7 @@ function Page() {
       <div style={{ position: "relative" }}>
         <DataPlate
           session={session}
-          clockMs={playback.clockMs}
+          playback={playback}
           steps={session?.steps.length ?? 0}
         />
         <Hero
@@ -225,7 +226,7 @@ function Page() {
                     ))}
                   </div>
                   <span className="clock data">
-                    {formatClock(playback.clockMs)}
+                    <ClockText playback={playback} />
                     <span className="faint"> / {formatClock(view.t1)}</span>
                   </span>
                 </div>
@@ -234,7 +235,7 @@ function Page() {
                   <StripChart
                     session={session}
                     view={view}
-                    clockMs={playback.clockMs}
+                    playback={playback}
                     onViewChange={setView}
                     onSelectStep={(index) => openStep(index)}
                     onSelectIncident={(id) => {
@@ -246,8 +247,7 @@ function Page() {
 
                 <Scrubber
                   session={session}
-                  clockMs={playback.clockMs}
-                  onSeek={playback.seek}
+                  playback={playback}
                   onSelectIncident={(id) => {
                     const incident = session.incidents.find((i) => i.id === id);
                     if (incident) onSelectIncident(incident);

@@ -1,13 +1,20 @@
 /* Paper: the grain, the rules, the vignette.
-   The page should read as a physical instrument panel, not a screen. */
+   The page should read as a physical instrument panel, not a screen.
 
-/* Faint horizontal ruled lines, like graph paper. Fixed so the paper
-   feels like it sits behind the content rather than scrolling with it. */
+   Both textures are painted ONCE behind the content, not over it. An
+   earlier version put them above everything with `z-index: 1` and a
+   full-viewport SVG `feTurbulence` filter; that made the browser
+   re-rasterise the filter over the whole viewport on every scroll and on
+   every animation frame, which is a large part of why the page stuttered.
+   Painting them behind, with the content in its own layer, keeps them
+   static. */
+
+/* Faint horizontal ruled lines, like graph paper. */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
   background-image: repeating-linear-gradient(
     to bottom,
@@ -18,21 +25,26 @@ body::before {
   );
 }
 
-/* Paper grain. An inline SVG fractal-noise filter at 3% opacity. */
+/* Paper grain: a small tiled noise texture.
+
+   This is a 140×140 SVG, but the important part is `background-repeat`: the
+   browser rasterises it once and tiles the bitmap. It is not a full-viewport
+   filter, and it sits behind the content, so scrolling does not repaint it. */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 1;
+  z-index: -1;
   pointer-events: none;
   opacity: 0.03;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
 }
 
 /* Everything real sits above the texture. */
 #root {
   position: relative;
-  z-index: 2;
+  z-index: 0;
 }
 
 /* The hero vignette: a warm pool of light, darker at the edges. */
