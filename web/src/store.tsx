@@ -29,6 +29,8 @@ export type LoadStatus = "idle" | "loading" | "ready" | "error";
 export interface Store {
   manifest: SessionManifestEntry[];
   session: Session | null;
+  /** The manifest id of the loaded session, or null for a dropped file. */
+  loadedId: string | null;
   status: LoadStatus;
   error: string | null;
   loadSession: (id: string) => Promise<void>;
@@ -45,6 +47,12 @@ const MANIFEST_URL = "sessions/index.json";
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [manifest, setManifest] = useState<SessionManifestEntry[]>([]);
   const [session, setSession] = useState<Session | null>(null);
+  // Which catalogue entry is loaded. This is deliberately separate from
+  // `session.meta.id`: the manifest id is the catalogue key (`risky-session`)
+  // while `meta.id` is the recorder's own id (`20261114T133000Z-c3`). Treating
+  // them as the same thing made the loader think nothing was ever loaded, so
+  // it refetched on every render and the chart never left its skeleton.
+  const [loadedId, setLoadedId] = useState<string | null>(null);
   const [status, setStatus] = useState<LoadStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -57,7 +65,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadFromText = useCallback(
-    (text: string, label = "session") => {
+    (text: string, label = "session", catalogueId: string | null = null) => {
       let parsed: unknown;
       try {
         parsed = JSON.parse(text);
@@ -73,6 +81,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return;
       }
       setSession(result.session);
+      setLoadedId(catalogueId);
       setStatus("ready");
       setError(null);
       showToast(`Session loaded: ${result.session.meta.title || label}`);
@@ -92,7 +101,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
-        loadFromText(await response.text(), id);
+        loadFromText(await response.text(), id, id);
       } catch (cause) {
         setStatus("error");
         setError(cause instanceof Error ? cause.message : "Failed to load");
@@ -145,6 +154,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     () => ({
       manifest,
       session,
+      loadedId,
       status,
       error,
       loadSession,
@@ -156,6 +166,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [
       manifest,
       session,
+      loadedId,
       status,
       error,
       loadSession,

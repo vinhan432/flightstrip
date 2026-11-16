@@ -47,7 +47,7 @@ export function resolveFocus(session: Session, stepIndex: number): Focus | null 
 }
 
 export function useSession(): SessionView {
-  const { session, loadSession, manifest } = useStore();
+  const { session, loadSession, manifest, loadedId } = useStore();
   const [route, navigate] = useHashRoute();
 
   const duration = session ? domain(session).end : 0;
@@ -56,14 +56,29 @@ export function useSession(): SessionView {
   const [view, setView] = useState<ViewRect>({ t0: 0, t1: 1, width: 1200 });
   const width = view.width;
 
+  // The id currently being fetched. A ref, not state: it must be readable
+  // synchronously inside the effect, before the next render.
+  const requesting = useRef<string | null>(null);
+
   // The route names a session; load it. Without this, a deep link such as
   // `#/s/clean` would show whatever session happened to be loaded while the
   // URL and the picker both claimed otherwise.
   //
   // With no hash at all, fall back to the default so the page is never empty.
+  //
+  // The comparison is against `loadedId` (the catalogue key), NOT
+  // `session.meta.id` (the recorder's own id). Those are different values, and
+  // conflating them made this effect refetch on every render — an infinite
+  // loop that left the chart on its skeleton forever.
+  //
+  // `status` is in the dependency list so a failed load is not retried in a
+  // tight loop either.
   useEffect(() => {
     if (route.sessionId) {
-      if (session?.meta.id === route.sessionId) return;
+      if (loadedId === route.sessionId) return;
+      // Already fetching this one; do not start a second request.
+      if (requesting.current === route.sessionId) return;
+      requesting.current = route.sessionId;
       void loadSession(route.sessionId);
       return;
     }
@@ -73,7 +88,7 @@ export function useSession(): SessionView {
       if (fallback) navigate({ kind: "session", sessionId: fallback.id });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route.sessionId, session, manifest, loadSession]);
+  }, [route.sessionId, loadedId, session, manifest, loadSession]);
 
   // Reset the view when the session changes. Deliberately keyed on the
   // session, not the width: a resize must not discard the user's zoom.
