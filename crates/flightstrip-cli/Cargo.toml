@@ -9,7 +9,7 @@ description = "Flightstrip CLI: record, inspect and export agent coding sessions
 name = "flightstrip"
 path = "src/main.rs"
 
-# No CLI framework, no error crate, no signal crate: argument parsing, error
-# context and Ctrl+C handling are each a few dozen lines in `src/`.
 [dependencies]
 flightstrip-core = { path = "../flightstrip-core" }
+clap = { version = "4.6", features = ["derive"] }
+clap_complete = "4.6"

@@ -32,11 +32,22 @@ impl DiffSource for NoDiffs {
 pub struct DetectInput<'a> {
     pub events: &'a [Event],
     pub diffs: &'a dyn DiffSource,
+    /// Rewrites of one file inside one prompt before `thrashing` fires.
+    pub thrash_threshold: u32,
 }
 
 impl<'a> DetectInput<'a> {
     pub fn new(events: &'a [Event], diffs: &'a dyn DiffSource) -> Self {
-        DetectInput { events, diffs }
+        DetectInput {
+            events,
+            diffs,
+            thrash_threshold: thrashing::THRESHOLD,
+        }
+    }
+
+    pub fn with_thrash_threshold(mut self, threshold: u32) -> Self {
+        self.thrash_threshold = threshold.max(1);
+        self
     }
 }
 
@@ -200,6 +211,7 @@ pub(crate) mod test_util {
                 exit_code: Some(exit_code),
                 duration_ms: Some(1),
                 source: CommandSource::Exec,
+                cwd: None,
                 prompt_id: None,
             }),
         )

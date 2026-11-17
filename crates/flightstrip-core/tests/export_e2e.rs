@@ -30,7 +30,7 @@ fn a_whole_session_exports_with_diffs_and_incidents() {
         EventLog::create(&root, "e2e", Some("claude".into()), SessionLabel::Recorded).unwrap();
 
     // A prompt, then the work it caused.
-    log.mark_prompt("add a left-pad dependency", PromptSource::Mark)
+    log.mark_prompt("add a left-pad dependency", PromptSource::Mark, None)
         .unwrap();
 
     let old_test = "test('add', () => {\n  expect(add(1, 2)).toBe(3);\n});\n";
@@ -69,6 +69,7 @@ fn a_whole_session_exports_with_diffs_and_incidents() {
         exit_code: Some(0),
         duration_ms: Some(1200),
         source: CommandSource::Exec,
+        cwd: None,
         prompt_id: None,
     }))
     .unwrap();
@@ -100,6 +101,7 @@ fn a_whole_session_exports_with_diffs_and_incidents() {
         exit_code: Some(0),
         duration_ms: Some(400),
         source: CommandSource::Exec,
+        cwd: None,
         prompt_id: None,
     }))
     .unwrap();

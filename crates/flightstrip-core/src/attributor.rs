@@ -60,6 +60,7 @@ mod tests {
             id: id.into(),
             text: text.into(),
             source: PromptSource::Mark,
+            agent: None,
         })
     }
 
@@ -110,6 +111,7 @@ mod tests {
                     exit_code: Some(0),
                     duration_ms: Some(5),
                     source: CommandSource::Exec,
+                    cwd: None,
                     prompt_id: None,
                 }),
             ),

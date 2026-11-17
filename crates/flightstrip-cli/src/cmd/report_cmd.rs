@@ -1,7 +1,9 @@
 //! `flightstrip report`: `session.json` → the markdown trust summary.
 
 use crate::cmd;
+use crate::config::Config;
 use crate::error::{Context, Result};
+use crate::style::Style;
 use flightstrip_core::export::{self, ExportOptions};
 use flightstrip_core::report;
 use flightstrip_core::schema::{SessionExport, Severity};
@@ -15,19 +17,9 @@ pub enum Format {
     Json,
 }
 
-impl Format {
-    pub fn parse(text: &str) -> Result<Format> {
-        match text.to_ascii_lowercase().as_str() {
-            "md" | "markdown" => Ok(Format::Markdown),
-            "github" | "pr" => Ok(Format::Github),
-            "json" => Ok(Format::Json),
-            other => crate::bail!("unknown report format `{other}`; use `md`, `github` or `json`"),
-        }
-    }
-}
-
 /// Returns `true` when the incident severity met `--fail-on`, so the caller can
 /// exit non-zero without printing an error message for a policy failure.
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     root: &Path,
     wanted: &str,
@@ -35,8 +27,10 @@ pub fn run(
     redact: bool,
     format: Format,
     fail_on: Option<Severity>,
+    config: &Config,
+    style: Style,
 ) -> Result<bool> {
-    let session_export = load(root, wanted, redact)?;
+    let session_export = load(root, wanted, redact, config)?;
     let body = match format {
         Format::Markdown => report::render(&session_export),
         Format::Github => report::render_github(&session_export),
@@ -53,7 +47,11 @@ pub fn run(
         }
         std::fs::write(&path, &body)
             .with_context(|| format!("while writing {}", path.display()))?;
-        eprintln!("\nflightstrip: report written to {}", path.display());
+        eprintln!(
+            "\n{} report written to {}",
+            style.pass("ok:"),
+            path.display()
+        );
     }
 
     let gated = fail_on
@@ -64,7 +62,7 @@ pub fn run(
 
 /// A `.json` argument is read directly; anything else is treated as a session id
 /// and exported fresh, so `report` never shows a stale file.
-fn load(root: &Path, wanted: &str, redact: bool) -> Result<SessionExport> {
+fn load(root: &Path, wanted: &str, redact: bool, config: &Config) -> Result<SessionExport> {
     if wanted.to_ascii_lowercase().ends_with(".json") {
         let path = PathBuf::from(wanted);
         let text = std::fs::read_to_string(&path)
@@ -84,6 +82,8 @@ fn load(root: &Path, wanted: &str, redact: bool) -> Result<SessionExport> {
             .map(|r| r.label)
             .unwrap_or(flightstrip_core::schema::SessionLabel::Recorded),
         redact,
+        attribution_gap_ms: config.attribution_decay_minutes.saturating_mul(60_000),
+        thrash_threshold: config.thrash_threshold,
         ..ExportOptions::default()
     };
     export::export(root, &dir, &opts).with_context(|| format!("while exporting session {id}"))

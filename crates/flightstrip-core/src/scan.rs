@@ -38,6 +38,8 @@ pub struct WatchOptions {
     /// "before". Costs one read of the repository.
     pub baseline: bool,
     pub verbose: bool,
+    /// Extra repo-relative globs from `.flightstrip/config.toml`.
+    pub extra_ignores: Vec<String>,
 }
 
 impl Default for WatchOptions {
@@ -46,6 +48,7 @@ impl Default for WatchOptions {
             poll_ms: 500,
             baseline: true,
             verbose: false,
+            extra_ignores: Vec::new(),
         }
     }
 }
@@ -78,7 +81,7 @@ pub struct Recorder<'a> {
 impl<'a> Recorder<'a> {
     pub fn new(root: &Path, log: &'a mut EventLog, opts: WatchOptions) -> Self {
         Recorder {
-            ignores: IgnoreSet::new(root),
+            ignores: IgnoreSet::with_extra(root, &opts.extra_ignores),
             store: SnapshotStore::at(root),
             root: root.to_path_buf(),
             log,
@@ -556,7 +559,7 @@ mod tests {
     fn changes_are_attributed_to_the_latest_prompt() {
         let root = temp_root("prompt");
         let mut log = EventLog::create(&root, "w", None, SessionLabel::Recorded).unwrap();
-        log.mark_prompt("add retry", crate::schema::PromptSource::Mark)
+        log.mark_prompt("add retry", crate::schema::PromptSource::Mark, None)
             .unwrap();
         let mut recorder = Recorder::new(&root, &mut log, WatchOptions::default());
         fs::write(root.join("a.txt"), "one\n").unwrap();

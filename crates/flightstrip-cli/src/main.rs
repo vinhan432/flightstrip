@@ -2,165 +2,379 @@
 //!
 //! Every subcommand is a thin shell around `flightstrip-core`: the CLI owns
 //! argument parsing, the terminal, and process spawning, and nothing else.
-//!
-//! Arguments are parsed by hand below. `clap` is a pleasant library, but this
-//! program has six subcommands and no generated shell completions, so the parser
-//! is a loop over `Vec<String>` with a `match` in it — and the binary stays small.
 
 mod cmd;
+mod config;
 mod error;
 mod interrupt;
+mod style;
 
 use crate::error::{Context, Result};
-use flightstrip_core::schema::Severity;
+use crate::style::Style;
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use flightstrip_core::schema::{SessionLabel, Severity};
 use flightstrip_core::{paths, session};
 use std::path::{Path, PathBuf};
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-const HELP: &str = "\
-flightstrip — a flight recorder for AI coding agents.
-
-USAGE
-  flightstrip [--repo PATH] <command> [options]
-
-COMMANDS
-  watch     Record file changes until Ctrl+C.
-              --title TEXT        human-readable session name
-              --agent TEXT        which agent this session records (free text)
-              --interval MS       how often the tree is polled (default 500)
-              --no-baseline       skip hashing the repo at start (cheaper, but
-                                  the first edit of an existing file has no
-                                  \"before\" to diff against)
-              --verbose           say why paths are skipped
-
-  mark      Record the prompt that caused the changes that follow.
-              flightstrip mark \"add a retry to the uploader\"
-            Reads stdin when no text is given, or when the text is \"-\".
-
-  exec      Run a command, record it, and parse its output for test results.
-              flightstrip exec -- cargo test
-            Mirrors the child's exit code.
-
-  list      List recorded sessions in this repository.
-
-  export    Turn a recorded session into session.json.
-              [SESSION]           session id or \"latest\" (default)
-              -o, --out PATH      output file (default: inside the session dir)
-              --redact            replace secret-looking values
-              --attribution-gap-ms MS
-              --no-hunks          omit diff hunks (smaller, no drawer)
-              --max-hunk-lines N  cap lines per hunk
-              --label recorded|fixture
-              --fixture           alias for --label fixture
-
-  report    Print the trust summary.
-              [SESSION|FILE.json] -o, --out PATH   --redact
-              --format md|github|json
-              --fail-on critical|warn|info   exit non-zero if matched
-
-  help      This text.   --version   Print the version.
-
-GLOBAL
-  --repo PATH   Repository to operate on. Defaults to the nearest enclosing
-                repository (a directory with .git or .flightstrip).
-
-Typical session:
+const AFTER_HELP: &str = "\
+EXAMPLES
+  flightstrip init
   flightstrip watch --agent \"claude cli\"
   flightstrip mark \"add a retry to the uploader\"
   flightstrip exec -- cargo test
   flightstrip export --out session.json
-  flightstrip report --out session.json
-";
+  flightstrip verify session.json
+  flightstrip report session.json --format github --fail-on critical
 
+Flightstrip records what an agent changed and what it ran. Prompt attribution is
+heuristic; detectors are deterministic rules, not a sandbox or a verdict.";
+
+#[derive(Debug, Parser)]
+#[command(
+    name = "flightstrip",
+    version,
+    about = "A flight recorder for AI coding agents.",
+    long_about = "Record a coding session, attribute changes to prompts, run deterministic \
+detectors, and export a session.json that can be reviewed or shared.",
+    after_help = AFTER_HELP,
+    arg_required_else_help = true
+)]
+struct Cli {
+    /// Repository to operate on. Defaults to the nearest enclosing repository.
+    #[arg(long, global = true, value_name = "PATH")]
+    repo: Option<PathBuf>,
+
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, Subcommand)]
 enum Command {
-    Watch {
-        title: Option<String>,
-        agent: Option<String>,
-        interval_ms: u64,
-        baseline: bool,
-        verbose: bool,
-    },
-    Mark {
-        text: Vec<String>,
-    },
-    Exec {
-        argv: Vec<String>,
-    },
-    List,
-    Export {
-        session: String,
-        out: Option<PathBuf>,
-        redact: bool,
-        attribution_gap_ms: u64,
-        fixture: bool,
-        no_hunks: bool,
-        max_hunk_lines: Option<usize>,
-        label: Option<flightstrip_core::schema::SessionLabel>,
-    },
-    Report {
-        session: String,
-        out: Option<PathBuf>,
-        redact: bool,
-        format: cmd::report_cmd::Format,
-        fail_on: Option<Severity>,
-    },
-    Help,
-    Version,
+    /// Record file changes until Ctrl+C.
+    Watch(WatchArgs),
+    /// Record the prompt that caused the changes that follow.
+    Mark(MarkArgs),
+    /// Run a command, record it, and parse its output for test results.
+    Exec(ExecArgs),
+    /// List recorded sessions in this repository.
+    List(ListArgs),
+    /// Turn a recorded session into session.json.
+    Export(ExportArgs),
+    /// Print the trust summary for a session or a session.json file.
+    Report(ReportArgs),
+    /// Create .flightstrip/config.toml and add .flightstrip/ to an existing
+    /// .gitignore.
+    Init(InitArgs),
+    /// Show the active session, uptime, counts and recent events.
+    Status(StatusArgs),
+    /// Check the environment and the project configuration.
+    Doctor(DoctorArgs),
+    /// Delete old sessions and orphaned snapshot objects.
+    Prune(PruneArgs),
+    /// Print shell completions.
+    Completions(CompletionsArgs),
+    /// Print a shell snippet defining fsmark and fsx. Does not edit profiles.
+    #[command(name = "shell-init")]
+    ShellInit(ShellInitArgs),
+    /// Validate a session.json against the export contract.
+    Verify(VerifyArgs),
+}
+
+#[derive(Debug, Args)]
+struct WatchArgs {
+    /// Human-readable session name.
+    #[arg(long, value_name = "TEXT")]
+    title: Option<String>,
+    /// Which agent this session records (free text).
+    #[arg(long, value_name = "TEXT")]
+    agent: Option<String>,
+    /// How often the tree is polled, in milliseconds. Defaults to config.toml.
+    #[arg(long, value_name = "MS")]
+    interval: Option<u64>,
+    /// Skip hashing the repository at start (cheaper, but the first edit has no
+    /// before state to diff against).
+    #[arg(long)]
+    no_baseline: bool,
+    /// Say why paths are skipped.
+    #[arg(long, short)]
+    verbose: bool,
+}
+
+#[derive(Debug, Args)]
+struct MarkArgs {
+    /// Prompt text. Reads stdin when omitted.
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
+    text: Vec<String>,
+    /// Read the prompt from stdin even when text is present.
+    #[arg(long)]
+    stdin: bool,
+    /// Tag this prompt with an agent name.
+    #[arg(long, value_name = "NAME")]
+    agent: Option<String>,
+}
+
+#[derive(Debug, Args)]
+struct ExecArgs {
+    /// Command to run, including its arguments. Use `--` if it starts with `-`.
+    #[arg(
+        trailing_var_arg = true,
+        allow_hyphen_values = true,
+        required = true,
+        num_args = 1..,
+        value_name = "COMMAND"
+    )]
+    argv: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+struct ListArgs {
+    /// Machine-readable JSON.
+    #[arg(long, conflicts_with = "quiet")]
+    json: bool,
+    /// Print one session id per line.
+    #[arg(long)]
+    quiet: bool,
+}
+
+#[derive(Debug, Args)]
+struct ExportArgs {
+    /// Session id, or "latest" (default).
+    #[arg(value_name = "SESSION")]
+    session: Option<String>,
+    /// Output file (default: inside the session directory).
+    #[arg(short, long, value_name = "PATH")]
+    out: Option<PathBuf>,
+    /// Replace secret-looking values. On by default when config sets
+    /// redact_by_default.
+    #[arg(long)]
+    redact: bool,
+    /// Attribution window in milliseconds.
+    #[arg(long, value_name = "MS")]
+    attribution_gap_ms: Option<u64>,
+    /// Omit diff hunks from the export.
+    #[arg(long)]
+    no_hunks: bool,
+    /// Cap lines per diff hunk.
+    #[arg(long, value_name = "N")]
+    max_hunk_lines: Option<usize>,
+    /// Mark the export as a fixture rather than a recording.
+    #[arg(long, value_name = "KIND")]
+    label: Option<LabelArg>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum LabelArg {
+    Recorded,
+    Fixture,
+}
+
+impl LabelArg {
+    fn into_label(self) -> SessionLabel {
+        match self {
+            LabelArg::Recorded => SessionLabel::Recorded,
+            LabelArg::Fixture => SessionLabel::Fixture,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+struct ReportArgs {
+    /// Session id or a path to session.json. Defaults to "latest".
+    #[arg(value_name = "SESSION")]
+    session: Option<String>,
+    /// Write the report to a file instead of only stdout.
+    #[arg(short, long, value_name = "PATH")]
+    out: Option<PathBuf>,
+    /// Redact secret-looking values.
+    #[arg(long)]
+    redact: bool,
+    /// Report format.
+    #[arg(long, value_enum, default_value_t = ReportFormat::Md)]
+    format: ReportFormat,
+    /// Exit with code 2 when an incident at or above this severity exists.
+    #[arg(long, value_enum, value_name = "SEVERITY")]
+    fail_on: Option<SeverityArg>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ReportFormat {
+    Md,
+    Github,
+    Json,
+}
+
+impl ReportFormat {
+    fn into_format(self) -> cmd::report_cmd::Format {
+        match self {
+            ReportFormat::Md => cmd::report_cmd::Format::Markdown,
+            ReportFormat::Github => cmd::report_cmd::Format::Github,
+            ReportFormat::Json => cmd::report_cmd::Format::Json,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum SeverityArg {
+    Critical,
+    Warn,
+    Info,
+}
+
+impl SeverityArg {
+    fn into_severity(self) -> Severity {
+        match self {
+            SeverityArg::Critical => Severity::Critical,
+            SeverityArg::Warn => Severity::Warn,
+            SeverityArg::Info => Severity::Info,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+struct InitArgs {
+    /// Overwrite an existing config.toml.
+    #[arg(long)]
+    force: bool,
+}
+
+#[derive(Debug, Args)]
+struct StatusArgs {
+    /// Machine-readable JSON.
+    #[arg(long, conflicts_with = "quiet")]
+    json: bool,
+    /// One line: id, uptime, event count.
+    #[arg(long)]
+    quiet: bool,
+}
+
+#[derive(Debug, Args)]
+struct DoctorArgs {
+    /// Machine-readable JSON.
+    #[arg(long, conflicts_with = "quiet")]
+    json: bool,
+    /// Print only failures and warnings.
+    #[arg(long)]
+    quiet: bool,
+}
+
+#[derive(Debug, Args)]
+struct PruneArgs {
+    /// Keep the newest N sessions (default 20).
+    #[arg(long, value_name = "N", default_value_t = 20)]
+    keep: usize,
+    /// Also delete sessions older than this many days.
+    #[arg(long, value_name = "DAYS")]
+    older_than: Option<u64>,
+    /// Show what would be deleted without deleting anything.
+    #[arg(long)]
+    dry_run: bool,
+    /// Do not ask for confirmation.
+    #[arg(long, short = 'y')]
+    yes: bool,
+}
+
+#[derive(Debug, Args)]
+struct CompletionsArgs {
+    /// Shell to generate completions for.
+    #[arg(value_enum)]
+    shell: ShellArg,
+}
+
+#[derive(Debug, Args)]
+struct ShellInitArgs {
+    /// Shell snippet to print.
+    #[arg(value_enum)]
+    shell: ShellArg,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ShellArg {
+    Powershell,
+    Bash,
+    Zsh,
+}
+
+impl ShellArg {
+    fn completion_shell(self) -> clap_complete::Shell {
+        match self {
+            ShellArg::Powershell => clap_complete::Shell::PowerShell,
+            ShellArg::Bash => clap_complete::Shell::Bash,
+            ShellArg::Zsh => clap_complete::Shell::Zsh,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+struct VerifyArgs {
+    /// Path to a session.json file.
+    #[arg(value_name = "SESSION.JSON")]
+    path: PathBuf,
 }
 
 fn main() {
-    let argv: Vec<String> = std::env::args().skip(1).collect();
-    match run(argv) {
+    let cli = Cli::parse();
+    match run(cli) {
         Ok(code) => std::process::exit(code),
         Err(message) => {
-            eprintln!("flightstrip: {message}");
+            let style = Style::auto();
+            eprintln!("{} {message}", style.fail("error:"));
             std::process::exit(1);
         }
     }
 }
 
-fn run(argv: Vec<String>) -> Result<i32> {
-    let (repo, rest) = split_global(&argv)?;
-    let command = parse(&rest)?;
-
-    // Help and version work without a repository.
-    match command {
-        Command::Help => {
-            print!("{HELP}");
+fn run(cli: Cli) -> Result<i32> {
+    // These do not need a repository.
+    match &cli.command {
+        Command::Completions(args) => {
+            cmd::completions::run(args.shell.completion_shell());
             return Ok(0);
         }
-        Command::Version => {
-            println!("flightstrip {VERSION}");
+        Command::ShellInit(args) => {
+            cmd::shell_init::run(args.shell);
             return Ok(0);
+        }
+        Command::Verify(args) => {
+            let ok = cmd::verify::run(&args.path, Style::auto())?;
+            return Ok(if ok { 0 } else { 1 });
         }
         _ => {}
     }
 
-    let root = resolve_root(repo.as_deref())?;
+    let root = resolve_root(cli.repo.as_deref())?;
     if paths::is_unc(&root) {
         crate::bail!(
-            "{} is a network share; a flight recorder only watches local repositories",
+            "{} is a network share; a flight recorder only watches local repositories. \
+             Move the repository to a local drive or pass a local --repo path.",
             root.display()
         );
     }
+    let style = Style::auto();
 
-    match command {
-        Command::Help | Command::Version => unreachable!("handled above"),
+    match cli.command {
+        Command::Completions(_) | Command::ShellInit(_) | Command::Verify(_) => {
+            unreachable!("handled above")
+        }
 
-        Command::Watch {
-            title,
-            agent,
-            interval_ms,
-            baseline,
-            verbose,
-        } => {
-            cmd::watch::run(&root, title, agent, interval_ms, baseline, verbose)?;
+        Command::Watch(args) => {
+            let cfg = config::Config::load(&root)?;
+            cmd::watch::run(
+                &root,
+                cmd::watch::Settings {
+                    title: args.title,
+                    agent: args.agent,
+                    interval_ms: args.interval.unwrap_or(cfg.poll_ms),
+                    baseline: !args.no_baseline,
+                    verbose: args.verbose,
+                },
+                cfg,
+                style,
+            )?;
             Ok(0)
         }
 
-        Command::Mark { text } => {
-            let joined = if text.is_empty() || text == ["-"] {
+        Command::Mark(args) => {
+            let joined = if args.stdin || args.text.is_empty() {
                 let mut buffer = String::new();
                 use std::io::Read;
                 std::io::stdin()
@@ -168,290 +382,93 @@ fn run(argv: Vec<String>) -> Result<i32> {
                     .context("while reading the prompt from stdin")?;
                 buffer
             } else {
-                text.join(" ")
+                args.text.join(" ")
             };
             let text = joined.trim();
             if text.is_empty() {
-                crate::bail!("a prompt needs text: flightstrip mark \"what you asked for\"");
+                crate::bail!(
+                    "a prompt needs text: flightstrip mark \"what you asked for\" \
+                     (or pipe it with --stdin)"
+                );
             }
-            cmd::mark::run(&root, text)?;
+            cmd::mark::run(&root, text, args.agent, style)?;
             Ok(0)
         }
 
-        Command::Exec { argv } => cmd::exec_cmd::run(&root, &argv),
+        Command::Exec(args) => cmd::exec_cmd::run(&root, &args.argv, style),
 
-        Command::List => {
-            cmd::list::run(&root)?;
+        Command::List(args) => {
+            let cfg = config::Config::load(&root)?;
+            cmd::list::run(&root, &cfg, args.json, args.quiet, style)?;
             Ok(0)
         }
 
-        Command::Export {
-            session,
-            out,
-            redact,
-            attribution_gap_ms,
-            fixture,
-            no_hunks,
-            max_hunk_lines,
-            label,
-        } => {
+        Command::Export(args) => {
+            let cfg = config::Config::load(&root)?;
+            let gap = args
+                .attribution_gap_ms
+                .unwrap_or(cfg.attribution_decay_minutes.saturating_mul(60_000));
             cmd::export_cmd::run(
                 &root,
-                &session,
-                out,
-                redact,
-                attribution_gap_ms,
-                fixture,
-                no_hunks,
-                max_hunk_lines,
-                label,
+                args.session.as_deref().unwrap_or("latest"),
+                args.out,
+                args.redact || cfg.redact_by_default,
+                gap,
+                args.label.map(LabelArg::into_label),
+                args.no_hunks,
+                args.max_hunk_lines,
+                &cfg,
+                style,
             )?;
             Ok(0)
         }
 
-        Command::Report {
-            session,
-            out,
-            redact,
-            format,
-            fail_on,
-        } => {
-            let gated = cmd::report_cmd::run(&root, &session, out, redact, format, fail_on)?;
+        Command::Report(args) => {
+            let cfg = config::Config::load(&root)?;
+            let gated = cmd::report_cmd::run(
+                &root,
+                args.session.as_deref().unwrap_or("latest"),
+                args.out,
+                args.redact || cfg.redact_by_default,
+                args.format.into_format(),
+                args.fail_on.map(SeverityArg::into_severity),
+                &cfg,
+                style,
+            )?;
             Ok(if gated { 2 } else { 0 })
         }
-    }
-}
 
-/// Pull `--repo` out of the argument list wherever it appears, stopping at `--`
-/// so a recorded command's own flags are left alone.
-fn split_global(argv: &[String]) -> Result<(Option<PathBuf>, Vec<String>)> {
-    let mut repo = None;
-    let mut rest = Vec::new();
-    let mut index = 0usize;
-    while index < argv.len() {
-        let arg = &argv[index];
-        if arg == "--" {
-            rest.extend_from_slice(&argv[index..]);
-            break;
-        }
-        if arg == "--repo" {
-            let value = argv
-                .get(index + 1)
-                .ok_or_else(|| "--repo needs a path".to_string())?;
-            repo = Some(PathBuf::from(value));
-            index += 2;
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--repo=") {
-            repo = Some(PathBuf::from(value));
-            index += 1;
-            continue;
-        }
-        rest.push(arg.clone());
-        index += 1;
-    }
-    Ok((repo, rest))
-}
-
-/// Drop the `--` that separates options from a raw command or prompt.
-fn without_separator(args: &[String]) -> &[String] {
-    match args.first() {
-        Some(first) if first == "--" => &args[1..],
-        _ => args,
-    }
-}
-
-fn next_value(args: &[String], index: &mut usize, flag: &str) -> Result<String> {
-    *index += 1;
-    args.get(*index)
-        .cloned()
-        .ok_or_else(|| format!("{flag} needs a value"))
-}
-
-fn parse(args: &[String]) -> Result<Command> {
-    let Some(name) = args.first() else {
-        return Ok(Command::Help);
-    };
-    let tail = &args[1..];
-
-    match name.as_str() {
-        "help" | "--help" | "-h" => Ok(Command::Help),
-        "--version" | "-V" => Ok(Command::Version),
-
-        "watch" => {
-            let mut title = None;
-            let mut agent = None;
-            let mut interval_ms = 500u64;
-            let mut baseline = true;
-            let mut verbose = false;
-            let mut index = 0usize;
-            while index < tail.len() {
-                match tail[index].as_str() {
-                    "--title" => title = Some(next_value(tail, &mut index, "--title")?),
-                    "--agent" => agent = Some(next_value(tail, &mut index, "--agent")?),
-                    "--interval" => {
-                        let raw = next_value(tail, &mut index, "--interval")?;
-                        interval_ms = raw.parse::<u64>().map_err(|_| {
-                            format!("--interval needs a number of milliseconds, not `{raw}`")
-                        })?;
-                    }
-                    "--no-baseline" => baseline = false,
-                    "--verbose" | "-v" => verbose = true,
-                    "--help" | "-h" => return Ok(Command::Help),
-                    other => crate::bail!("unknown option for watch: {other}"),
-                }
-                index += 1;
-            }
-            Ok(Command::Watch {
-                title,
-                agent,
-                interval_ms,
-                baseline,
-                verbose,
-            })
+        Command::Init(args) => {
+            cmd::init::run(&root, args.force, style)?;
+            Ok(0)
         }
 
-        "mark" => Ok(Command::Mark {
-            text: without_separator(tail).to_vec(),
-        }),
-
-        "exec" => {
-            let argv: Vec<String> = without_separator(tail).to_vec();
-            if argv.is_empty() {
-                crate::bail!("exec needs a command: flightstrip exec -- cargo test");
-            }
-            Ok(Command::Exec { argv })
+        Command::Status(args) => {
+            cmd::status::run(&root, args.json, args.quiet, style)?;
+            Ok(0)
         }
 
-        "list" => {
-            if let Some(extra) = tail.first() {
-                crate::bail!("list takes no options (got `{extra}`)");
-            }
-            Ok(Command::List)
+        Command::Doctor(args) => {
+            let ok = cmd::doctor::run(&root, args.json, args.quiet, style)?;
+            Ok(if ok { 0 } else { 1 })
         }
 
-        "export" => {
-            let mut session = None;
-            let mut out = None;
-            let mut redact = false;
-            let mut attribution_gap_ms = flightstrip_core::attributor::DEFAULT_GAP_MS;
-            let mut fixture = false;
-            let mut no_hunks = false;
-            let mut max_hunk_lines = None;
-            let mut label = None;
-            let mut index = 0usize;
-            while index < tail.len() {
-                match tail[index].as_str() {
-                    "-o" | "--out" => {
-                        out = Some(PathBuf::from(next_value(tail, &mut index, "--out")?))
-                    }
-                    "--redact" => redact = true,
-                    "--fixture" => fixture = true,
-                    "--no-hunks" => no_hunks = true,
-                    "--max-hunk-lines" => {
-                        let raw = next_value(tail, &mut index, "--max-hunk-lines")?;
-                        max_hunk_lines = Some(raw.parse::<usize>().map_err(|_| {
-                            format!("--max-hunk-lines needs a number, not `{raw}`")
-                        })?);
-                    }
-                    "--label" => {
-                        let raw = next_value(tail, &mut index, "--label")?;
-                        label = Some(match raw.to_ascii_lowercase().as_str() {
-                            "recorded" => flightstrip_core::schema::SessionLabel::Recorded,
-                            "fixture" => flightstrip_core::schema::SessionLabel::Fixture,
-                            other => {
-                                crate::bail!("--label expects recorded or fixture, not `{other}`")
-                            }
-                        });
-                    }
-                    "--attribution-gap-ms" => {
-                        let raw = next_value(tail, &mut index, "--attribution-gap-ms")?;
-                        attribution_gap_ms = raw.parse::<u64>().map_err(|_| {
-                            format!("--attribution-gap-ms needs a number, not `{raw}`")
-                        })?;
-                    }
-                    "--help" | "-h" => return Ok(Command::Help),
-                    other if other.starts_with('-') => {
-                        crate::bail!("unknown option for export: {other}")
-                    }
-                    other => {
-                        if session.is_some() {
-                            crate::bail!("export takes at most one session id");
-                        }
-                        session = Some(other.to_string());
-                    }
-                }
-                index += 1;
-            }
-            Ok(Command::Export {
-                session: session.unwrap_or_else(|| "latest".to_string()),
-                out,
-                redact,
-                attribution_gap_ms,
-                fixture,
-                no_hunks,
-                max_hunk_lines,
-                label,
-            })
+        Command::Prune(args) => {
+            cmd::prune::run(
+                &root,
+                args.keep,
+                args.older_than,
+                args.dry_run,
+                args.yes,
+                style,
+            )?;
+            Ok(0)
         }
-
-        "report" => {
-            let mut session = None;
-            let mut out = None;
-            let mut redact = false;
-            let mut format = cmd::report_cmd::Format::Markdown;
-            let mut fail_on = None;
-            let mut index = 0usize;
-            while index < tail.len() {
-                match tail[index].as_str() {
-                    "-o" | "--out" => {
-                        out = Some(PathBuf::from(next_value(tail, &mut index, "--out")?))
-                    }
-                    "--redact" => redact = true,
-                    "--format" => {
-                        format = cmd::report_cmd::Format::parse(&next_value(
-                            tail, &mut index, "--format",
-                        )?)?
-                    }
-                    "--fail-on" => {
-                        let raw = next_value(tail, &mut index, "--fail-on")?;
-                        fail_on = Some(match raw.to_ascii_lowercase().as_str() {
-                            "critical" => Severity::Critical,
-                            "warn" | "warning" => Severity::Warn,
-                            "info" => Severity::Info,
-                            other => crate::bail!(
-                                "--fail-on expects critical, warn or info, not `{other}`"
-                            ),
-                        });
-                    }
-                    "--help" | "-h" => return Ok(Command::Help),
-                    other if other.starts_with('-') => {
-                        crate::bail!("unknown option for report: {other}")
-                    }
-                    other => {
-                        if session.is_some() {
-                            crate::bail!("report takes at most one session id or file");
-                        }
-                        session = Some(other.to_string());
-                    }
-                }
-                index += 1;
-            }
-            Ok(Command::Report {
-                session: session.unwrap_or_else(|| "latest".to_string()),
-                out,
-                redact,
-                format,
-                fail_on,
-            })
-        }
-
-        other => crate::bail!("unknown command `{other}`; try `flightstrip help`"),
     }
 }
 
 /// The nearest directory containing `.flightstrip` or `.git`, falling back to the
-/// directory itself.
+/// directory itself. An explicit `--repo` is used as given.
 fn resolve_root(explicit: Option<&Path>) -> Result<PathBuf> {
     let start = match explicit {
         Some(path) => {
@@ -495,8 +512,10 @@ fn find_root(start: PathBuf) -> PathBuf {
 mod tests {
     use super::*;
 
-    fn args(list: &[&str]) -> Vec<String> {
-        list.iter().map(|item| item.to_string()).collect()
+    fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
+        let mut full = vec!["flightstrip"];
+        full.extend_from_slice(args);
+        Cli::try_parse_from(full)
     }
 
     #[test]
@@ -505,7 +524,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(base.join("repo").join(".git")).unwrap();
         std::fs::create_dir_all(base.join("repo").join("src").join("deep")).unwrap();
-        let found = find_root(paths::clean_path(&base.join("repo").join("src").join("deep")));
+        let found = find_root(paths::clean_path(
+            &base.join("repo").join("src").join("deep"),
+        ));
         assert!(found.ends_with("repo"), "{}", found.display());
         let _ = std::fs::remove_dir_all(&base);
     }
@@ -522,53 +543,85 @@ mod tests {
     }
 
     #[test]
-    fn global_repo_flag_is_lifted_out() {
-        let (repo, rest) = split_global(&args(&[
-            "--repo", "C:/repo", "export", "--redact", "--out", "x.json",
-        ]))
-        .unwrap();
-        assert_eq!(repo.unwrap().to_string_lossy(), "C:/repo");
-        assert_eq!(rest, args(&["export", "--redact", "--out", "x.json"]));
-    }
-
-    #[test]
-    fn repo_flag_after_the_separator_belongs_to_the_command() {
-        let (repo, rest) = split_global(&args(&["exec", "--", "tool", "--repo", "x"])).unwrap();
-        assert!(repo.is_none());
-        assert_eq!(rest, args(&["exec", "--", "tool", "--repo", "x"]));
+    fn global_repo_flag_is_accepted_before_or_after_the_command() {
+        let cli = parse(&["--repo", "C:/repo", "list"]).unwrap();
+        assert_eq!(cli.repo.unwrap().to_string_lossy(), "C:/repo");
+        let cli = parse(&["list", "--repo", "C:/repo"]).unwrap();
+        assert_eq!(cli.repo.unwrap().to_string_lossy(), "C:/repo");
     }
 
     #[test]
     fn exec_keeps_hyphenated_arguments() {
-        let command = parse(&args(&["exec", "--", "cargo", "test", "--all", "-q"])).unwrap();
-        let Command::Exec { argv } = command else {
+        let cli = parse(&["exec", "--", "cargo", "test", "--all", "-q"]).unwrap();
+        let Command::Exec(args) = cli.command else {
             panic!("expected exec");
         };
-        assert_eq!(argv, args(&["cargo", "test", "--all", "-q"]));
+        assert_eq!(args.argv, vec!["cargo", "test", "--all", "-q"]);
+    }
+
+    #[test]
+    fn exec_works_without_the_separator() {
+        let cli = parse(&["exec", "echo", "hello"]).unwrap();
+        let Command::Exec(args) = cli.command else {
+            panic!("expected exec");
+        };
+        assert_eq!(args.argv, vec!["echo", "hello"]);
     }
 
     #[test]
     fn export_defaults_to_the_latest_session() {
-        let command = parse(&args(&["export"])).unwrap();
-        let Command::Export {
-            session, redact, ..
-        } = command
-        else {
+        let cli = parse(&["export"]).unwrap();
+        let Command::Export(args) = cli.command else {
             panic!("expected export");
         };
-        assert_eq!(session, "latest");
-        assert!(!redact);
+        assert!(args.session.is_none());
+        assert!(!args.redact);
+        assert!(!args.no_hunks);
     }
 
     #[test]
-    fn unknown_options_are_rejected() {
-        assert!(parse(&args(&["watch", "--debounced"])).is_err());
-        assert!(parse(&args(&["nonsense"])).is_err());
-        assert!(parse(&args(&["--interval"])).is_err());
+    fn report_formats_and_fail_on_parse() {
+        let cli = parse(&[
+            "report",
+            "session.json",
+            "--format",
+            "github",
+            "--fail-on",
+            "critical",
+        ])
+        .unwrap();
+        let Command::Report(args) = cli.command else {
+            panic!("expected report");
+        };
+        assert_eq!(args.format, ReportFormat::Github);
+        assert_eq!(args.fail_on, Some(SeverityArg::Critical));
     }
 
     #[test]
-    fn no_arguments_prints_help() {
-        assert!(matches!(parse(&[]).unwrap(), Command::Help));
+    fn mark_accepts_an_agent_tag() {
+        let cli = parse(&["mark", "--agent", "claude", "do the thing"]).unwrap();
+        let Command::Mark(args) = cli.command else {
+            panic!("expected mark");
+        };
+        assert_eq!(args.agent.as_deref(), Some("claude"));
+        assert_eq!(args.text, vec!["do the thing"]);
+    }
+
+    #[test]
+    fn unknown_commands_and_options_fail() {
+        assert!(parse(&["nonsense"]).is_err());
+        assert!(parse(&["watch", "--debounced"]).is_err());
+    }
+
+    #[test]
+    fn no_arguments_asks_for_a_command() {
+        assert!(Cli::try_parse_from(["flightstrip"]).is_err());
+    }
+
+    #[test]
+    fn completions_accepts_the_three_supported_shells() {
+        for shell in ["powershell", "bash", "zsh"] {
+            assert!(parse(&["completions", shell]).is_ok(), "{shell}");
+        }
     }
 }

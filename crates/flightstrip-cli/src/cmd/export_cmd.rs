@@ -1,7 +1,9 @@
 //! `flightstrip export`: event log → `session.json`.
 
 use crate::cmd;
+use crate::config::Config;
 use crate::error::{Context, Result};
+use crate::style::Style;
 use flightstrip_core::differ::DiffOptions;
 use flightstrip_core::export::{self, ExportOptions};
 use flightstrip_core::schema::{SessionLabel, Severity};
@@ -15,16 +17,15 @@ pub fn run(
     out: Option<PathBuf>,
     redact: bool,
     attribution_gap_ms: u64,
-    fixture: bool,
+    requested_label: Option<SessionLabel>,
     no_hunks: bool,
     max_hunk_lines: Option<usize>,
-    requested_label: Option<SessionLabel>,
+    config: &Config,
+    style: Style,
 ) -> Result<()> {
     let id = cmd::resolve_session(root, wanted)?;
     let dir = session::session_dir(root, &id);
-    let label = requested_label.unwrap_or(if fixture {
-        SessionLabel::Fixture
-    } else {
+    let label = requested_label.unwrap_or_else(|| {
         session::read_record(&dir)
             .map(|r| r.label)
             .unwrap_or(SessionLabel::Recorded)
@@ -41,6 +42,7 @@ pub fn run(
         redact,
         attribution_gap_ms,
         diff,
+        thrash_threshold: config.thrash_threshold,
     };
 
     let session_export = export::export(root, &dir, &opts)
@@ -53,15 +55,31 @@ pub fn run(
     let critical = count(&session_export.incidents, Severity::Critical);
     let warn = count(&session_export.incidents, Severity::Warn);
     let info = count(&session_export.incidents, Severity::Info);
-
     let size = std::fs::metadata(&out).map(|meta| meta.len()).unwrap_or(0);
-    println!("Wrote {} ({})", out.display(), human_bytes(size));
+
     println!(
-        "  {} steps · {} prompts · {} files · {} incidents ({critical} critical, {warn} warn, {info} info)",
+        "{} {} ({})",
+        style.pass("Wrote"),
+        out.display(),
+        human_bytes(size)
+    );
+    println!(
+        "  {} steps · {} prompts · {} files · {} incidents ({} critical, {} warn, {} info)",
         session_export.stats.steps,
         session_export.prompts.len(),
         session_export.stats.files_touched,
-        session_export.incidents.len()
+        session_export.incidents.len(),
+        if critical > 0 {
+            style.red(&critical.to_string())
+        } else {
+            critical.to_string()
+        },
+        if warn > 0 {
+            style.yellow(&warn.to_string())
+        } else {
+            warn.to_string()
+        },
+        info
     );
     if redact {
         println!("  secret-looking values were redacted");

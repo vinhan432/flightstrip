@@ -9,15 +9,13 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 fn cell(text: &str) -> String {
-    text.replace('\r', " ")
-        .replace('\n', " ")
-        .replace('|', "\\|")
+    text.replace(['\r', '\n'], " ").replace('|', "\\|")
 }
 
 /// Inline code that survives a backtick inside the value. A single code span
 /// cannot contain a backtick, so use two and pad with a space.
 fn code(text: &str) -> String {
-    let flat = text.replace('\r', " ").replace('\n', " ");
+    let flat = text.replace(['\r', '\n'], " ");
     if flat.contains('`') {
         format!("`` {flat} ``")
     } else {
@@ -385,6 +383,7 @@ mod tests {
                 exit_code: Some(0),
                 duration_ms: Some(1),
                 source: CommandSource::Exec,
+                cwd: None,
                 prompt_id: None,
             }),
             hunks: None,

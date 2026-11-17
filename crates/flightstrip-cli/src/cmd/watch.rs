@@ -1,7 +1,9 @@
 //! `flightstrip watch`: the recording loop.
 
+use crate::config::Config;
 use crate::error::{Context, Result};
 use crate::interrupt;
+use crate::style::Style;
 use flightstrip_core::paths;
 use flightstrip_core::scan::{Recorder, WatchOptions};
 use flightstrip_core::schema::{EventKind, SessionLabel};
@@ -9,14 +11,16 @@ use flightstrip_core::session::{self, EventLog};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
-pub fn run(
-    root: &Path,
-    title: Option<String>,
-    agent: Option<String>,
-    interval_ms: u64,
-    baseline: bool,
-    verbose: bool,
-) -> Result<()> {
+/// What the CLI asked for, separate from the project config.
+pub struct Settings {
+    pub title: Option<String>,
+    pub agent: Option<String>,
+    pub interval_ms: u64,
+    pub baseline: bool,
+    pub verbose: bool,
+}
+
+pub fn run(root: &Path, settings: Settings, config: Config, style: Style) -> Result<()> {
     // Refuse to run twice on one repo: two recorders would interleave events.
     if let Some(active) = session::read_active(root) {
         if session::pid_alive(active.pid) {
@@ -33,21 +37,13 @@ pub fn run(
         session::clear_active(root);
     }
 
-    let title = title.unwrap_or_else(|| {
+    let title = settings.title.clone().unwrap_or_else(|| {
         let root_name = session::repo_name(root);
         format!("{root_name} session")
     });
 
     interrupt::install().context("while installing the Ctrl+C handler")?;
-    record(
-        root,
-        &title,
-        agent,
-        interval_ms,
-        baseline,
-        verbose,
-        interrupt::flag(),
-    )?;
+    record(root, &title, &settings, &config, style, interrupt::flag())?;
     Ok(())
 }
 
@@ -57,24 +53,26 @@ pub fn run(
 fn record(
     root: &Path,
     title: &str,
-    agent: Option<String>,
-    interval_ms: u64,
-    baseline: bool,
-    verbose: bool,
+    settings: &Settings,
+    config: &Config,
+    style: Style,
     stop: &AtomicBool,
 ) -> Result<()> {
-    let mut log = EventLog::create(root, title, agent.clone(), SessionLabel::Recorded)
+    let mut log = EventLog::create(root, title, settings.agent.clone(), SessionLabel::Recorded)
         .context("while starting the session")?;
     let id = log.id();
     session::write_active(root, &id).context("while claiming the active session")?;
 
-    println!("Flightstrip recorder");
-    println!("  session  {id}");
+    println!("{}", style.bold("Flightstrip recorder"));
+    println!("  session  {}", style.cyan(&id));
     println!(
         "  repo     {}",
         paths::to_slashes(&root.display().to_string())
     );
-    println!("  agent    {}", agent.as_deref().unwrap_or("unspecified"));
+    println!(
+        "  agent    {}",
+        settings.agent.as_deref().unwrap_or("unspecified")
+    );
     println!("  state    {}", session::state_dir(root).display());
     println!();
     println!("Start the agent in another terminal. Before you send it a prompt, run:");
@@ -84,20 +82,21 @@ fn record(
     println!();
 
     let opts = WatchOptions {
-        poll_ms: interval_ms,
-        baseline,
-        verbose,
+        poll_ms: settings.interval_ms,
+        baseline: settings.baseline,
+        verbose: settings.verbose,
+        extra_ignores: config.ignore_globs.clone(),
     };
 
     let recorded = {
         let mut recorder = Recorder::new(root, &mut log, opts);
-        if baseline {
+        if settings.baseline {
             match recorder.seed_baseline() {
                 Ok(count) => println!("Hashed {count} files as the starting state.\n"),
                 Err(error) => eprintln!("warning: could not hash the repository: {error}"),
             }
         }
-        println!("Recording. Ctrl+C to stop.\n");
+        println!("{} Ctrl+C to stop.\n", style.info("Recording."));
         recorder.run(stop)
     };
 
@@ -145,7 +144,21 @@ mod tests {
 
         let stop = AtomicBool::new(false);
         stop.store(true, Ordering::SeqCst);
-        record(&root, "stop test", None, 50, false, false, &stop).unwrap();
+        record(
+            &root,
+            "stop test",
+            &Settings {
+                title: Some("stop test".into()),
+                agent: None,
+                interval_ms: 50,
+                baseline: false,
+                verbose: false,
+            },
+            &Config::default(),
+            Style::plain(),
+            &stop,
+        )
+        .unwrap();
 
         assert!(session::read_active(&root).is_none());
         let sessions = crate::cmd::all_sessions(&root);

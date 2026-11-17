@@ -276,16 +276,28 @@ fn rule_matches(rule: &Rule, lower_rel: &str) -> bool {
 pub struct IgnoreSet {
     root: PathBuf,
     rules: Vec<Rule>,
+    /// Extra globs from `.flightstrip/config.toml`, matched in addition to
+    /// `.gitignore`. They are not negatable: config is a recorder policy.
+    extra: Vec<String>,
 }
 
 impl IgnoreSet {
     pub fn new(root: &Path) -> Self {
+        Self::with_extra(root, &[])
+    }
+
+    pub fn with_extra(root: &Path, extra: &[String]) -> Self {
         let rules = std::fs::read_to_string(root.join(".gitignore"))
             .map(|text| parse_gitignore(&text))
             .unwrap_or_default();
         IgnoreSet {
             root: root.to_path_buf(),
             rules,
+            extra: extra
+                .iter()
+                .map(|glob| glob.trim().to_ascii_lowercase())
+                .filter(|glob| !glob.is_empty())
+                .collect(),
         }
     }
 
@@ -293,6 +305,28 @@ impl IgnoreSet {
     /// by `.gitignore`, or by `.git/info/exclude`.
     pub fn is_ignored(&self, abs: &Path) -> bool {
         self.reason(abs).is_some()
+    }
+
+    fn extra_matches(&self, lower_rel: &str) -> bool {
+        let segments: Vec<&str> = lower_rel.split('/').collect();
+        self.extra.iter().any(|glob| {
+            let directory_only = glob.ends_with('/');
+            let pattern = glob.trim_end_matches('/');
+            if pattern.contains('/') {
+                if glob_match(pattern, lower_rel) {
+                    return true;
+                }
+                // A directory pattern also excludes everything beneath it.
+                let depth = if directory_only {
+                    segments.len().saturating_sub(1)
+                } else {
+                    segments.len()
+                };
+                (1..=depth).any(|n| glob_match(pattern, &segments[..n].join("/")))
+            } else {
+                segments.iter().any(|segment| glob_match(pattern, segment))
+            }
+        })
     }
 
     pub fn reason(&self, abs: &Path) -> Option<&'static str> {
@@ -306,8 +340,11 @@ impl IgnoreSet {
         if let Some(why) = ignored_reason(&rel) {
             return Some(why);
         }
-        // Later rules win, so a negation can rescue an earlier exclusion.
         let lower = rel.to_ascii_lowercase();
+        if self.extra_matches(&lower) {
+            return Some(".flightstrip config ignore_globs");
+        }
+        // Later rules win, so a negation can rescue an earlier exclusion.
         let mut verdict = None;
         for rule in &self.rules {
             if rule_matches(rule, &lower) {

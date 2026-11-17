@@ -171,6 +171,7 @@ impl EventKind {
                 put(&mut fields, "id", Json::from(&prompt.id));
                 put(&mut fields, "text", Json::from(&prompt.text));
                 put(&mut fields, "source", Json::from(prompt.source.as_str()));
+                put(&mut fields, "agent", Json::from(prompt.agent.clone()));
             }
             EventKind::FileChange(change) => {
                 put(&mut fields, "path", Json::from(&change.path));
@@ -202,6 +203,7 @@ impl EventKind {
                 put(&mut fields, "exit_code", Json::from(command.exit_code));
                 put(&mut fields, "duration_ms", Json::from(command.duration_ms));
                 put(&mut fields, "source", Json::from(command.source.as_str()));
+                put(&mut fields, "cwd", Json::from(command.cwd.clone()));
                 put(
                     &mut fields,
                     "prompt_id",
@@ -238,6 +240,7 @@ impl EventKind {
                 id: text_field(value, "id")?,
                 text: text_field(value, "text")?,
                 source: PromptSource::from_str(opt_text_field(value, "source").as_deref()),
+                agent: opt_text_field(value, "agent"),
             }),
             "file_change" => EventKind::FileChange(FileChange {
                 path: text_field(value, "path")?,
@@ -256,6 +259,7 @@ impl EventKind {
                     .map(|code| code as i32),
                 duration_ms: opt_uint_field(value, "duration_ms"),
                 source: CommandSource::from_str(opt_text_field(value, "source").as_deref()),
+                cwd: opt_text_field(value, "cwd"),
                 prompt_id: opt_text_field(value, "prompt_id"),
             }),
             "test_run" => EventKind::TestRun(TestRun {
@@ -291,6 +295,9 @@ pub struct Prompt {
     pub id: String,
     pub text: String,
     pub source: PromptSource,
+    /// Free-text agent tag supplied by `mark --agent`. Optional so older event
+    /// logs and the session.json contract keep working unchanged.
+    pub agent: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -313,6 +320,9 @@ pub struct Command {
     pub exit_code: Option<i32>,
     pub duration_ms: Option<u64>,
     pub source: CommandSource,
+    /// Working directory at spawn time, repo-relative when it is inside the
+    /// repository. Optional so older event logs still parse.
+    pub cwd: Option<String>,
     pub prompt_id: Option<String>,
 }
 
@@ -568,6 +578,8 @@ pub struct PromptSummary {
     pub files_touched: u32,
     pub commands_run: u32,
     pub incidents: u32,
+    /// Optional `mark --agent` tag; omitted consumers can ignore it.
+    pub agent: Option<String>,
 }
 
 impl PromptSummary {
@@ -580,6 +592,7 @@ impl PromptSummary {
             ("files_touched".into(), Json::from(self.files_touched)),
             ("commands_run".into(), Json::from(self.commands_run)),
             ("incidents".into(), Json::from(self.incidents)),
+            ("agent".into(), Json::from(self.agent.clone())),
         ])
     }
 
@@ -592,6 +605,7 @@ impl PromptSummary {
             files_touched: opt_uint_field(value, "files_touched").unwrap_or(0) as u32,
             commands_run: opt_uint_field(value, "commands_run").unwrap_or(0) as u32,
             incidents: opt_uint_field(value, "incidents").unwrap_or(0) as u32,
+            agent: opt_text_field(value, "agent"),
         })
     }
 }
@@ -1023,6 +1037,7 @@ mod tests {
                 files_touched: 1,
                 commands_run: 0,
                 incidents: 0,
+                agent: None,
             }],
             steps: vec![ExportStep {
                 seq: 1,
@@ -1031,6 +1046,7 @@ mod tests {
                     id: "p-1".into(),
                     text: "fix it".into(),
                     source: PromptSource::Mark,
+                    agent: None,
                 }),
                 hunks: None,
             }],

@@ -41,7 +41,7 @@ impl Detector for Thrashing {
 
         let mut found = Vec::new();
         for ((path, prompt_id), bucket) in buckets {
-            if bucket.count < THRESHOLD {
+            if bucket.count < input.thrash_threshold {
                 continue;
             }
             let Some(event) = input.events.get(bucket.last_event as usize) else {
@@ -82,6 +82,7 @@ mod tests {
                 id: id.to_string(),
                 text: "go".into(),
                 source: PromptSource::Mark,
+                agent: None,
             }),
         ));
     }

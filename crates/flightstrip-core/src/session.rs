@@ -258,13 +258,19 @@ impl EventLog {
 
     /// Append a prompt. The id is derived from the sequence number, which makes
     /// it stable and readable in the report ("caused by prompt p-7").
-    pub fn mark_prompt(&mut self, text: &str, source: PromptSource) -> Result<Event> {
+    pub fn mark_prompt(
+        &mut self,
+        text: &str,
+        source: PromptSource,
+        agent: Option<String>,
+    ) -> Result<Event> {
         let text = text.to_string();
         self.append_with(move |seq| {
             EventKind::Prompt(crate::schema::Prompt {
                 id: format!("p-{seq}"),
                 text,
                 source,
+                agent,
             })
         })
     }
@@ -434,7 +440,8 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let mut log = EventLog::create(&root, "test", None, SessionLabel::Recorded).unwrap();
-        log.mark_prompt("do a thing", PromptSource::Mark).unwrap();
+        log.mark_prompt("do a thing", PromptSource::Mark, None)
+            .unwrap();
         log.close().unwrap();
         let events = log.events().unwrap();
         assert_eq!(events.len(), 3);
@@ -452,7 +459,7 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         let mut log = EventLog::create(&root, "test", None, SessionLabel::Recorded).unwrap();
         let id = log.id();
-        log.mark_prompt("one", PromptSource::Mark).unwrap();
+        log.mark_prompt("one", PromptSource::Mark, None).unwrap();
         drop(log);
 
         let mut log = EventLog::open(&root, &id).unwrap();
@@ -470,7 +477,8 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let mut log = EventLog::create(&root, "test", None, SessionLabel::Recorded).unwrap();
-        log.mark_prompt("keep me", PromptSource::Mark).unwrap();
+        log.mark_prompt("keep me", PromptSource::Mark, None)
+            .unwrap();
         let dir = log.dir().to_path_buf();
         drop(log);
 

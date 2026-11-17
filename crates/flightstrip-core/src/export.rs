@@ -21,6 +21,7 @@ pub struct ExportOptions {
     pub redact: bool,
     pub attribution_gap_ms: u64,
     pub diff: DiffOptions,
+    pub thrash_threshold: u32,
 }
 
 impl Default for ExportOptions {
@@ -30,6 +31,7 @@ impl Default for ExportOptions {
             redact: false,
             attribution_gap_ms: DEFAULT_GAP_MS,
             diff: DiffOptions::default(),
+            thrash_threshold: crate::detectors::thrashing::THRESHOLD,
         }
     }
 }
@@ -97,7 +99,8 @@ pub fn export(root: &Path, dir: &Path, opts: &ExportOptions) -> Result<SessionEx
     }
     let diffs = PrecomputedDiffs { by_seq };
 
-    let incidents = run_all(&DetectInput::new(&events, &diffs));
+    let incidents =
+        run_all(&DetectInput::new(&events, &diffs).with_thrash_threshold(opts.thrash_threshold));
 
     let record = read_record(dir);
     let id = record.as_ref().map(|r| r.id.clone()).unwrap_or_else(|| {
@@ -157,6 +160,7 @@ pub fn export(root: &Path, dir: &Path, opts: &ExportOptions) -> Result<SessionEx
                 .iter()
                 .filter(|i| i.prompt_id.as_deref() == Some(prompt.id.as_str()))
                 .count() as u32,
+            agent: prompt.agent.clone(),
         });
     }
 
@@ -181,7 +185,14 @@ pub fn export(root: &Path, dir: &Path, opts: &ExportOptions) -> Result<SessionEx
             seq: event.seq,
             t_ms: event.t_ms,
             kind: event.kind.clone(),
-            hunks: diffs.by_seq.get(&event.seq).cloned(),
+            // `max_hunks == 0` is the explicit "omit diffs" request. Diffs are
+            // still computed above because the detectors need them; only the
+            // display copy is dropped.
+            hunks: if opts.diff.max_hunks == 0 {
+                None
+            } else {
+                diffs.by_seq.get(&event.seq).cloned()
+            },
         })
         .collect();
 

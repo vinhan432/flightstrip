@@ -1,10 +1,17 @@
 //! One module per subcommand.
 
+pub mod completions;
+pub mod doctor;
 pub mod exec_cmd;
 pub mod export_cmd;
+pub mod init;
 pub mod list;
 pub mod mark;
+pub mod prune;
 pub mod report_cmd;
+pub mod shell_init;
+pub mod status;
+pub mod verify;
 pub mod watch;
 
 use crate::error::Result;

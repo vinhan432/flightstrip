@@ -77,6 +77,7 @@ impl Session {
                 id,
                 text: text.to_string(),
                 source: PromptSource::Mark,
+                agent: Some("claude-code".to_string()),
             }),
         );
     }
@@ -124,6 +125,7 @@ impl Session {
                 exit_code: Some(exit_code),
                 duration_ms: Some(duration_ms),
                 source: CommandSource::Exec,
+                cwd: Some(".".to_string()),
                 prompt_id: None,
             }),
         );
