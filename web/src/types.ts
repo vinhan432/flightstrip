@@ -10,7 +10,10 @@ export type PromptSource = "mark" | "pty" | "import";
 
 export type CommandSource = "exec" | "pty" | "import";
 
-export type SessionLabel = "real" | "fixture" | "synthetic";
+// `recorded` and `fixture` are what the Rust writer emits (schema.rs).
+// `synthetic` is written by scripts/make-synthetic.mjs for the stress session,
+// which is generated in JavaScript and never round-trips through the reader.
+export type SessionLabel = "recorded" | "fixture" | "synthetic";
 
 export type IncidentKind =
   | "test_weakened"

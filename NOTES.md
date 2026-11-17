@@ -34,7 +34,7 @@ lockfile has exactly two packages: the two workspace members.
 | | Before | After |
 |---|---|---|
 | Packages in `Cargo.lock` | 112 | 2 |
-| Release binary | not recorded | 852,480 bytes (832 KiB), stripped |
+| Release binary | not recorded | 1,467,904 bytes (1,433 KiB), stripped |
 | Cold debug build | ~25 s | 12.1 s |
 | Cold release build | not recorded | 29.1 s |
 
@@ -114,7 +114,7 @@ is recorded rather than quietly dropped.
 | Packages | 0 | ~180 in `node_modules` (dev-only except React) |
 | Page source | 3 files, ~53 KB | ~30 modules under `web/src/` |
 | Type safety | none | TypeScript strict, checked in `tsc -b` |
-| JS shipped | ~30 KB raw | ~267 KB raw / ~84 KB gzip |
+| JS shipped | ~30 KB raw | 279,765 B raw / 87,270 B gzip |
 
 What the build bought: the strip chart, the CVR drawer, the trace graph and the
 report are separate components with typed interfaces, and the wire format is

@@ -44,7 +44,7 @@ back/forward work with no extra bookkeeping.
 - `npm run synthetic` writes a 3,000-step session for a stress check. It is
   gitignored; the site labels it `synthetic`.
 - `npm run bench` measures the hot paths. At 3,002 steps / 2,641 churn points:
-  downsample to 2,400 points takes **0.26 ms**; the full view holds 120
+  downsample to 2,400 points takes **0.60 ms**; the full view holds 120
   prompts + 120 commands + 120 tests, and a 50× zoom culls that to 7 each.
 
 ## The CVR drawer
@@ -87,6 +87,4 @@ origin and the triangle flies across the chart.
   section, not a separate view.
 - **`parseSession` returns one error string**, not a list. The Drop Zone shows
   the first bad field path; the spec wants the first three in plain language.
-- **`label` type is `"real" | "fixture" | "synthetic"`**; the spec text says
-  `"recorded" | "fixture"`. The engine's actual output wins.
 - **Canvas in jsdom** logs `getContext not implemented`; harmless test noise.

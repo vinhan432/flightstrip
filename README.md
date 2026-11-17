@@ -22,11 +22,11 @@ flightstrip report                     # markdown summary for the PR
 From `flightstrip report` on the bundled `weakened-tests` fixture:
 
 ```
-| Step | Kind          | Severity | Evidence                                  |
-|------|---------------|----------|-------------------------------------------|
-| 12   | test_weakened | critical | expect(retries).toBe(2)                   |
-| 19   | test_regression | critical | npm test · 41 passed / 1 failed · touched: src/upload.ts |
-| 26   | test_weakened | critical | test.skip('drains the queue', async () => { |
+| Step | Kind | Severity | Evidence |
+|------|------|----------|----------|
+| 4    | test_regression | critical | npm test · 41 passed / 1 failed · touched: src/upload.ts |
+| 6    | test_weakened | critical | expect(retries).toBe(2); |
+| 10   | test_weakened | critical | test.skip('drains the queue', async () => { |
 ```
 
 ## Why
@@ -94,7 +94,7 @@ Add `.flightstrip/` to `.gitignore`.
 ```sh
 flightstrip export --out session.json           # latest session
 flightstrip export 20261114T133000Z-c3 --redact # scrub secret-looking values
-flightstrip export --fixture                   # mark it synthetic
+flightstrip export --label fixture             # mark it a fixture, not a recording
 ```
 
 `session.json` is the only interface between the recorder and anything else.
@@ -132,8 +132,7 @@ chart is Canvas 2D under an SVG overlay, and the motion is CSS keyframes and
 > **This is a deliberate reversal of an earlier decision.** The page used to be
 > `index.html` + `style.css` + `app.js` with no npm dependencies and no build
 > step, and NOTES.md argued for that. The replay page is now a compiled app; the
-> recorder is still dependency-free. The old page is kept in `web-legacy/` until
-> the new one is verified, then removed. Why the change was worth it is in
+> recorder is still dependency-free. Why the change was worth it is in
 > [NOTES.md](NOTES.md).
 
 Two scripts support it:
@@ -219,7 +218,6 @@ crates/flightstrip-core/    recording, storage, diffing, detectors, export
 crates/flightstrip-cli/     argument parsing, terminal, process spawning
 fixtures/                   three generated sessions (clean / weakened / risky)
 web/                        the replay page (Vite + React + TypeScript)
-web-legacy/                 the pre-rewrite page, kept until the new one is verified
 ```
 
 ## Development

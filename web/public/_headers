@@ -1,7 +1,5 @@
-/*
-  Session JSON is regenerated whenever the fixtures change, so it gets a
-  short TTL. Hashed assets are immutable: their names change on every build.
-*/
+# Session JSON is regenerated whenever the fixtures change, so it gets a short
+# TTL. Hashed assets are immutable: their names change on every build.
 
 /sessions/*
   Cache-Control: public, max-age=300
