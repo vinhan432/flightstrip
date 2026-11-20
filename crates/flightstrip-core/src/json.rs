@@ -154,10 +154,20 @@ pub fn arr(items: impl IntoIterator<Item = Json>) -> Json {
 
 // ── parsing ───────────────────────────────────────────────────────────────
 
+/// Deepest nesting the parser will follow.
+///
+/// The reader is recursive, so without a ceiling a hostile or accidental deeply
+/// nested document walks off the stack and the process dies with no message at
+/// all (`STATUS_STACK_OVERFLOW`, not a Rust panic). A session file is a few
+/// levels deep; 256 is far past anything a client would legitimately send and
+/// still cheap to reject.
+pub const MAX_DEPTH: usize = 256;
+
 pub fn parse(text: &str) -> Result<Json> {
     let mut parser = Parser {
         bytes: text.as_bytes(),
         pos: 0,
+        depth: 0,
     };
     let value = parser.value()?;
     parser.skip_ws();
@@ -170,6 +180,7 @@ pub fn parse(text: &str) -> Result<Json> {
 struct Parser<'a> {
     bytes: &'a [u8],
     pos: usize,
+    depth: usize,
 }
 
 impl Parser<'_> {
@@ -201,6 +212,19 @@ impl Parser<'_> {
     }
 
     fn value(&mut self) -> Result<Json> {
+        if self.depth >= MAX_DEPTH {
+            return Err(Error::Json(format!(
+                "nesting deeper than {MAX_DEPTH} levels at byte {}",
+                self.pos
+            )));
+        }
+        self.depth += 1;
+        let parsed = self.value_inner();
+        self.depth -= 1;
+        parsed
+    }
+
+    fn value_inner(&mut self) -> Result<Json> {
         self.skip_ws();
         match self.peek() {
             Some(b'{') => self.object(),
@@ -566,6 +590,34 @@ mod tests {
         assert!(parse("{\"a\":}").is_err());
         assert!(parse("[1,2").is_err());
         assert!(parse("\"unterminated").is_err());
+    }
+
+    #[test]
+    fn nesting_deeper_than_the_limit_is_an_error_not_a_crash() {
+        // A recursive descent parser on 5,000 levels of `[` aborts the process
+        // with STATUS_STACK_OVERFLOW before it can return an error, which the
+        // `verify` and `report` fuzz checks caught. Depth has to be refused.
+        let deep = format!("{}{}", "[".repeat(5000), "]".repeat(5000));
+        let error = parse(&deep).unwrap_err();
+        assert!(error.to_string().contains("nesting"), "{error}");
+
+        // The innermost array of an all-empty nest never calls value() again,
+        // so exactly MAX_DEPTH levels parse and MAX_DEPTH + 1 is refused.
+        let at_limit = format!("{}{}", "[".repeat(MAX_DEPTH), "]".repeat(MAX_DEPTH));
+        assert!(
+            parse(&at_limit).is_ok(),
+            "{} levels should parse",
+            MAX_DEPTH
+        );
+        let past_limit = format!("{}{}", "[".repeat(MAX_DEPTH + 1), "]".repeat(MAX_DEPTH + 1));
+        assert!(
+            parse(&past_limit).is_err(),
+            "{} levels should be refused",
+            MAX_DEPTH + 1
+        );
+
+        let shallow = format!("{}{}", "[".repeat(20), "]".repeat(20));
+        assert!(parse(&shallow).is_ok());
     }
 
     #[test]
