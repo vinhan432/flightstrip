@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "meta": {
+    "id": "20261120T041720Z-baf4",
+    "title": "Cart: add a quantity field",
+    "agent": "claude code",
+    "started_at": "2026-11-20T04:17:20.645Z",
+    "duration_ms": 4901,
+    "os": "windows",
+    "repo_name": "staged-clean",
+    "label": "recorded"
+  },
+  "prompts": [
+    {
+      "id": "p-1",
+      "text": "support quantity in the cart total",
+      "step": 1,
+      "t_ms": 944,
+      "files_touched": 2,
+      "commands_run": 2,
+      "incidents": 0,
+      "agent": null
+    }
+  ],
+  "steps": [
+    {
+      "seq": 0,
+      "t_ms": 4,
+      "kind": "session_start",
+      "title": "Cart: add a quantity field",
+      "agent": "claude code",
+      "os": "windows",
+      "repo_name": "staged-clean"
+    },
+    {
+      "seq": 1,
+      "t_ms": 944,
+      "kind": "prompt",
+      "id": "p-1",
+      "text": "support quantity in the cart total",
+      "source": "mark",
+      "agent": null
+    },
+    {
+      "seq": 2,
+      "t_ms": 1354,
+      "kind": "file_change",
+      "path": "src/cart.js",
+      "op": "modify",
+      "before_hash": "ea2f3172b15ab0a27af2b340c7ee3367",
+      "after_hash": "1a16656d55e5fcf59d98c1f8def56785",
+      "lines_added": 1,
+      "lines_removed": 1,
+      "prompt_id": "p-1",
+      "hunks": [
+        {
+          "old_start": 1,
+          "new_start": 1,
+          "lines": [
+            {
+              "tag": "context",
+              "text": "export function total(items) {"
+            },
+            {
+              "tag": "context",
+              "text": "  let sum = 0;"
+            },
+            {
+              "tag": "remove",
+              "text": "  for (const item of items) sum += item.price;"
+            },
+            {
+              "tag": "add",
+              "text": "  for (const item of items) sum += item.price * (item.quantity ?? 1);"
+            },
+            {
+              "tag": "context",
+              "text": "  return sum;"
+            },
+            {
+              "tag": "context",
+              "text": "}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "seq": 3,
+      "t_ms": 2761,
+      "kind": "file_change",
+      "path": "test/cart.test.js",
+      "op": "modify",
+      "before_hash": "44f0b04b06b651b6aa9b2ffa26ebd163",
+      "after_hash": "966eddb423e8f41e9fe636361c973470",
+      "lines_added": 4,
+      "lines_removed": 0,
+      "prompt_id": "p-1",
+      "hunks": [
+        {
+          "old_start": 6,
+          "new_start": 6,
+          "lines": [
+            {
+              "tag": "context",
+              "text": "  assert.equal(total([{ price: 2 }, { price: 3 }]), 5);"
+            },
+            {
+              "tag": "context",
+              "text": "});"
+            },
+            {
+              "tag": "add",
+              "text": ""
+            },
+            {
+              "tag": "add",
+              "text": "test('multiplies by quantity', () => {"
+            },
+            {
+              "tag": "add",
+              "text": "  assert.equal(total([{ price: 2, quantity: 4 }]), 8);"
+            },
+            {
+              "tag": "add",
+              "text": "});"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "seq": 4,
+      "t_ms": 4093,
+      "kind": "command",
+      "cmd": "node --test",
+      "exit_code": 0,
+      "duration_ms": 927,
+      "source": "exec",
+      "cwd": "",
+      "prompt_id": "p-1"
+    },
+    {
+      "seq": 5,
+      "t_ms": 4112,
+      "kind": "test_run",
+      "cmd": "node --test",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "total": 2,
+      "ok": true,
+      "prompt_id": "p-1"
+    },
+    {
+      "seq": 6,
+      "t_ms": 4901,
+      "kind": "command",
+      "cmd": "git diff --stat",
+      "exit_code": 0,
+      "duration_ms": 293,
+      "source": "exec",
+      "cwd": "",
+      "prompt_id": "p-1"
+    },
+    {
+      "seq": 7,
+      "t_ms": 4901,
+      "kind": "session_end"
+    }
+  ],
+  "incidents": [],
+  "files": {
+    "src/cart.js": {
+      "churn": 1,
+      "prompts": [
+        "p-1"
+      ],
+      "ops": {
+        "modify": 1
+      }
+    },
+    "test/cart.test.js": {
+      "churn": 1,
+      "prompts": [
+        "p-1"
+      ],
+      "ops": {
+        "modify": 1
+      }
+    }
+  },
+  "stats": {
+    "steps": 8,
+    "files_touched": 2,
+    "commands": 2,
+    "test_runs": 1,
+    "incidents_by_kind": {},
+    "tests_first_ok": true,
+    "tests_last_ok": true
+  }
+}

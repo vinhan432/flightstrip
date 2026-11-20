@@ -198,6 +198,12 @@ if (-not $SkipWeb) {
         Write-Result 'W4' 'every shipped session has steps' ($dangling.Count -eq 0) $(if ($dangling.Count -eq 0) { 'ok' } else { "missing: $($dangling.Name -join ', ')" })
     }
 
+    # The Rust reader and the website's parser must agree on every session file.
+    $contract = Invoke-Native -File 'node' -Arguments @('scripts/validate-sessions.mjs') -WorkingDirectory $RepoRoot
+    $contractLine = ($contract.Output -split "`n" | Select-String -Pattern 'agree, \d+ disagree' | ForEach-Object { $_.ToString().Trim() }) -join ' '
+    Write-Result 'W6' 'engine <-> website session contract' ($contract.Code -eq 0) `
+        $(if ($contractLine) { $contractLine } else { 'validator produced no verdict' })
+
     $vitest = Invoke-Native -File 'npx' -Arguments @('vitest', 'run') -WorkingDirectory $WebDir
     $esc    = [char]27   # Windows PowerShell 5.1 has no `e escape
     $plain  = $vitest.Output -replace ([regex]::Escape($esc) + '\[[0-9;]*m'), ''
