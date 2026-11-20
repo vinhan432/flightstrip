@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Flightstrip">
+  <rect width="32" height="32" rx="3" fill="#e6dfd2"/>
+  <rect x="3" y="7" width="26" height="18" fill="#f4efe4"/>
+  <!-- the paper feed perforations -->
+  <g fill="#c4b9a8">
+    <rect x="6" y="9" width="1.5" height="1.5"/>
+    <rect x="6" y="13" width="1.5" height="1.5"/>
+    <rect x="6" y="17" width="1.5" height="1.5"/>
+    <rect x="6" y="21" width="1.5" height="1.5"/>
+    <rect x="24.5" y="9" width="1.5" height="1.5"/>
+    <rect x="24.5" y="13" width="1.5" height="1.5"/>
+    <rect x="24.5" y="17" width="1.5" height="1.5"/>
+    <rect x="24.5" y="21" width="1.5" height="1.5"/>
+  </g>
+  <!-- the trace: flat, a spike, flat -->
+  <polyline points="9,19 13,19 14.5,11 16,22 17.5,15 19,19 23,19"
+            fill="none" stroke="#1c1917" stroke-width="1.6"
+            stroke-linecap="square" stroke-linejoin="miter"/>
+  <!-- the one incident mark -->
+  <rect x="22" y="9" width="1.6" height="14" fill="#d4621a"/>
+</svg>

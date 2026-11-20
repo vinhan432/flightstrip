@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "lint": "tsc -p tsconfig.json --pretty false",
     "preview": "vite preview",
     "prebuild": "node scripts/sync-fixtures.mjs",
     "test": "vitest run",
@@ -27,7 +28,8 @@
     "jsdom": "^25.0.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "wrangler": "^4.165.0"
   },
   "allowScripts": {
     "esbuild@0.25.12": true,
