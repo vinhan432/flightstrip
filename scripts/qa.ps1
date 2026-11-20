@@ -15,7 +15,8 @@
 param(
     [switch]$Full,
     [switch]$SkipRust,
-    [switch]$SkipWeb
+    [switch]$SkipWeb,
+    [switch]$SkipEngine
 )
 
 # Native commands legitimately write to stderr (cargo, npm). With 'Stop' that
@@ -142,6 +143,29 @@ if (-not $SkipRust) {
         $verifyHelp = Invoke-Native -File $Exe -Arguments @('verify', '--help') -WorkingDirectory $WorkRoot
         Write-Result 'R6' 'verify subcommand present' ($verifyHelp.Code -eq 0) 'usage printed'
     }
+
+    # ── engine behaviour (21 scenarios, each in its own throwaway repo) ──────
+    if (-not $SkipEngine -and (Test-Path -LiteralPath $Exe)) {
+        Write-Host ("-" * 100)
+        $engineScript = Join-Path $PSScriptRoot 'qa-engine.ps1'
+        & powershell -ExecutionPolicy Bypass -File $engineScript -Exe $Exe -WorkRoot $WorkRoot
+        $engineExit = $LASTEXITCODE
+
+        $engineResults = Join-Path $WorkRoot 'engine-results.json'
+        if (Test-Path -LiteralPath $engineResults) {
+            foreach ($row in (Get-Content -LiteralPath $engineResults -Raw | ConvertFrom-Json)) {
+                $script:Results.Add([pscustomobject]@{
+                    Id = $row.Id; Check = $row.Check; Result = $row.Result; Detail = $row.Detail
+                })
+            }
+        }
+        else {
+            Write-Result 'E0' 'engine suite produced results' $false 'engine-results.json missing'
+        }
+        if ($engineExit -ne 0 -and $engineResults -and -not (Test-Path -LiteralPath $engineResults)) {
+            Write-Result 'E0' 'engine suite ran' $false "exit $engineExit"
+        }
+    }
 }
 
 # ── web ──────────────────────────────────────────────────────────────────────
@@ -184,6 +208,7 @@ if (-not $SkipWeb) {
 
 # ── report ───────────────────────────────────────────────────────────────────
 $fail = @($script:Results | Where-Object { $_.Result -eq 'FAIL' })
+$skip = @($script:Results | Where-Object { $_.Result -eq 'SKIP' })
 Write-Host ("-" * 100)
 Write-Host ("{0} checks, {1} passed, {2} failed" -f $script:Results.Count, ($script:Results.Count - $fail.Count), $fail.Count)
 if ($fail.Count -gt 0) {
