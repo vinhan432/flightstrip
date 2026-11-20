@@ -12,9 +12,16 @@ The project started with the conventional crate set: `serde` + `serde_json`,
 cost a 112-package lockfile and a build that needed a linker setup that kept
 failing on this machine.
 
-The goal changed to "as lightweight as possible", so both Rust crates now have an
-**empty `[dependencies]`** section apart from the internal path dependency. The
-lockfile has exactly two packages: the two workspace members.
+The recorder core (`flightstrip-core`) now has an **empty `[dependencies]`**
+section and compiles against std alone. The CLI is not dependency-free: when the
+subcommand set grew to eleven, the hand-rolled argument loop was replaced with
+`clap` + `clap_complete` (commit `cb15e29`), because generated `--help`,
+subcommand parsing and shell completions were no longer worth re-implementing.
+`Cargo.lock` therefore has **24 packages** — `clap`, `clap_derive`,
+`clap_complete`, their `anstyle`/`syn`/`windows-sys` trees, and the two workspace
+members. Everything below about `json`, `time`, `hash`, `differ`, `scan`,
+`paths`, `redact` and `testparse` is still true: those are in the core, which
+still has no dependencies.
 
 | Removed | Replacement | What it cost |
 |---|---|---|
@@ -25,7 +32,7 @@ lockfile has exactly two packages: the two workspace members.
 | `notify` + debouncer | `scan.rs`: a polling scanner | 500 ms latency and one directory walk per interval. No inotify/kqueue/FSEvents/`ReadDirectoryChangesW` per platform, no debouncing state machine, and identical behaviour everywhere. |
 | `ignore` | `paths.rs`: own `.gitignore` matcher (~120 lines) | Root `.gitignore` only, no nested files, no character classes. `[a-z]` patterns silently do not match. |
 | `regex` | Hand-written matchers in `testparse`, `redact` and the detectors | More code, and markers are substring/shape based rather than fully general patterns. Each rule reads as the thing it detects. |
-| `clap` | `main.rs`: a loop over `Vec<String>` | No generated completions, no man pages, no `--help` for free. Six subcommands did not justify the library. |
+| `clap` | `main.rs`: a loop over `Vec<String>` (reverted in `cb15e29` — see above) | Six subcommands did not justify the library; eleven did. Generated completions and `--help` came back at a cost of 22 transitive packages. |
 | `anyhow`, `thiserror` | `error.rs`: a `String` alias plus a `Context` trait | No error source chain backtraces; the CLI prints one line and exits 1. The core still has a small typed `Error` enum for library callers. |
 | `lz4_flex` | Nothing — snapshots are plain LF-normalised bytes | The store uses more disk. Deduplication by content hash means repeated saves of the same file cost nothing extra, and `.flightstrip/` is disposable. |
 
@@ -33,12 +40,13 @@ lockfile has exactly two packages: the two workspace members.
 
 | | Before | After |
 |---|---|---|
-| Packages in `Cargo.lock` | 112 | 2 |
-| Release binary | not recorded | 1,467,904 bytes (1,433 KiB), stripped |
+| Packages in `Cargo.lock` | 112 | 24 (2 workspace + `clap`/`clap_complete` trees) |
+| Release binary | not recorded | 1,468,416 bytes (1,434 KiB), stripped |
 | Cold debug build | ~25 s | 12.1 s |
-| Cold release build | not recorded | 29.1 s |
+| Cold release build | not recorded | 2 m 15.9 s (measured 2026-11-20 in a `git archive` clone; the 29.1 s figure was recorded before `clap` was added) |
 
-These are build-time and size numbers on one machine, not a performance claim.
+These are build-time and size numbers on one machine (Windows 11, Rust 1.100),
+not a performance claim.
 Runtime work — hashing, diffing, polling — was not benchmarked, and no speedup is
 asserted for it.
 
@@ -145,6 +153,11 @@ The obvious cost of no browser in the development environment remains: layout
 was not seen. The integration test cannot catch a visual bug either. That gap is
 still open, and browser verification in CI is still the fix (see *Next, in
 order*).
+
+## Dev-only dependencies added for the release
+
+- `wrangler` (dev, `web/package.json`): Cloudflare's Pages deploy CLI. It is a
+  build tool, never shipped to the browser, and the only way to publish `dist/`.
 
 ## What is deliberately missing
 
