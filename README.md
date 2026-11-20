@@ -55,8 +55,19 @@ piece is the Ctrl+C handler, which has a Unix branch — but the macOS and Linux
 builds were not exercised while developing this, so treat them as untested.
 Rust stable, no other toolchain, no C compiler, no `pkg-config`.
 
-> On this machine the workspace is configured for the gnullvm/gnu toolchain in
-> `.cargo/config.toml`; a stock `cargo build` elsewhere does not need it.
+> If your Windows box has no MSVC build tools, a default `cargo build` fails at
+> link time on `dlltool`. The fix used while developing this is the gnullvm
+> target plus a machine-local `.cargo/config.toml`:
+>
+> ```sh
+> rustup toolchain install stable-x86_64-pc-windows-gnullvm
+> rustup toolchain install stable-x86_64-pc-windows-gnu   # three import libs
+> cp .cargo/config.toml.example .cargo/config.toml        # then edit the paths
+> ```
+>
+> `.cargo/config.toml` is gitignored because it contains absolute paths; the
+> example is committed with placeholders. A normal MSVC Windows install, Linux
+> and macOS do not need any of it.
 
 ## Use
 

@@ -5,3 +5,4 @@ node_modules
 web/node_modules
 web/dist
 web/public/sessions/
+/.cargo/config.toml
