@@ -52,7 +52,7 @@ The spec implies these inputs and conditions but assigns no test to them. Each i
 - [ ] **Step 1: Create the safety net before touching anything**
 
 ```bash
-cd C:/Users/Admin/Desktop/hackathon/flightstrip
+cd flightstrip
 git init
 git add -A
 git commit -m "chore: snapshot before web rewrite"
