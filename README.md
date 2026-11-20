@@ -121,6 +121,13 @@ A markdown summary: verdict counts, an incident table, test status, commands run
 dependencies added, and which files belong to which prompt. It renders on GitHub
 and in a terminal.
 
+### In CI
+
+`--fail-on critical` exits 2 when the threshold is met and 0 when it is not, so a
+workflow can gate a pull request without parsing the text. `examples/github/flightstrip.yml`
+verifies each committed export, writes the report into the job summary, and fails
+on a critical incident; it is an example rather than an active workflow here.
+
 ### Replay
 
 ```sh

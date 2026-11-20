@@ -1,0 +1,65 @@
+# Example: gate a pull request on the sessions it commits.
+#
+# Copy to .github/workflows/flightstrip.yml. It is an example, not a workflow
+# this repository runs: the commands below were verified by hand on Windows
+# against the staged fixtures (`verify` → exit 0, `report --fail-on critical` →
+# exit 2 on the weakened-test fixture, 0 on the clean one). The Linux build has
+# not been run here, so treat the runner image as untested.
+#
+# What it does: rebuilds the CLI from source, verifies every committed export,
+# writes a markdown report into the job summary, and fails the job if any
+# session contains a critical incident.
+
+name: flightstrip
+
+on:
+  pull_request:
+    paths:
+      - "sessions/**.json"
+
+env:
+  EXPORTS: sessions
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build the CLI
+        run: cargo build --release --bin flightstrip
+
+      - name: Verify every export against the format contract
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=("$EXPORTS"/*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No exports in $EXPORTS/ — nothing to check."
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            ./target/release/flightstrip verify "$f"
+          done
+
+      - name: Report into the job summary
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for f in "$EXPORTS"/*.json; do
+            echo "### $f" >> "$GITHUB_STEP_SUMMARY"
+            ./target/release/flightstrip report "$f" --format md \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
+      # Exit 2 when a critical incident meets the threshold. Nothing else in the
+      # pipeline needs to parse the report.
+      - name: Fail on a critical incident
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for f in "$EXPORTS"/*.json; do
+            ./target/release/flightstrip report "$f" --format md --fail-on critical > /dev/null
+          done
